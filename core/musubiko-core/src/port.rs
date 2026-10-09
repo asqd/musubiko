@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ops::{Effect, Guard, Operation, Step};
+use crate::ops::{Effect, Guard, Operation, Resume, Step};
 use crate::{Error, Repo, Result, Status};
 
 /// A planned operation: what it will run and why it cannot, if it cannot.
@@ -125,11 +125,8 @@ impl Repo {
             }
         }
 
-        let tmp = std::env::temp_dir().join(format!(
-            "musubiko-{}-{}",
-            self.repo_name(),
-            target.replace('/', "-")
-        ));
+        // Next to the repository, so a conflict is easy to open in an editor.
+        let tmp = self.worktree_path(&format!("port-{}", target.replace('/', "-")));
         if tmp.exists() {
             problems.push(format!(
                 "Временная папка {} осталась от прошлого раза: удалите её",
@@ -180,14 +177,17 @@ impl Repo {
         );
         let mut pick = vec!["-C", tmp.as_str(), "cherry-pick", "-x"];
         pick.extend(commits.iter().map(String::as_str));
-        steps.push(Step::new(
-            format!(
-                "Перенести {} {}",
-                commits.len(),
-                plural_commits(commits.len())
-            ),
-            &pick,
-        ));
+        steps.push(Step {
+            resume: Some(Resume::CherryPick { dir: tmp.clone() }),
+            ..Step::new(
+                format!(
+                    "Перенести {} {}",
+                    commits.len(),
+                    plural_commits(commits.len())
+                ),
+                &pick,
+            )
+        });
         steps.push(
             Step::new(
                 format!("Передвинуть {target} на результат"),
@@ -435,13 +435,6 @@ impl Repo {
             .collect();
         list.sort_by_key(|(t, _)| *t);
         Ok(list.into_iter().map(|(_, h)| h).collect())
-    }
-
-    pub(crate) fn repo_name(&self) -> String {
-        self.root
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_else(|| "repo".into())
     }
 }
 

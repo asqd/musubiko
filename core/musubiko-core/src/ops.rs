@@ -24,6 +24,17 @@ pub struct Step {
     pub guard: Option<Guard>,
     #[serde(default)]
     pub effect: Option<Effect>,
+    /// How to carry on after this step stopped half-way, instead of running it again.
+    #[serde(default)]
+    pub resume: Option<Resume>,
+}
+
+/// A step that can stop in the middle and be finished by hand.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum Resume {
+    /// A cherry-pick in `dir` that stopped on a conflict.
+    CherryPick { dir: String },
 }
 
 /// Run the step only while `refname` still points at `hash`.
@@ -138,6 +149,7 @@ impl Step {
             fail_if_output: None,
             guard: None,
             effect: None,
+            resume: None,
         }
     }
 
@@ -223,6 +235,51 @@ impl Operation {
                 if i + 1 == self.steps.len() {
                     self.status = OpStatus::Done;
                 }
+            }
+            Err(e) => {
+                self.states[i] = StepState::Failed {
+                    error: e.to_string(),
+                };
+                self.status = OpStatus::Failed;
+            }
+        }
+    }
+
+    /// The scratch folder of a cherry-pick that stopped on a conflict, if that is where the
+    /// operation stands.
+    pub fn stopped_pick(&self) -> Option<&str> {
+        let i = self
+            .states
+            .iter()
+            .position(|s| matches!(s, StepState::Failed { .. }))?;
+        match &self.steps[i].resume {
+            Some(Resume::CherryPick { dir }) => Some(dir),
+            None => None,
+        }
+    }
+
+    /// Finishes a step that stopped half-way: continues (or, with `skip`, drops the current
+    /// commit of) a cherry-pick after the user resolved its conflict. A new stop is recorded
+    /// like any failure.
+    pub fn resume(&mut self, repo: &Repo, skip: bool) {
+        let Some(i) = self
+            .states
+            .iter()
+            .position(|s| matches!(s, StepState::Failed { .. }))
+        else {
+            return;
+        };
+        let Some(Resume::CherryPick { dir }) = self.steps[i].resume.clone() else {
+            return;
+        };
+        match repo.continue_pick(&dir, skip) {
+            Ok(output) => {
+                self.states[i] = StepState::Done { output };
+                self.status = if i + 1 == self.steps.len() {
+                    OpStatus::Done
+                } else {
+                    OpStatus::Running
+                };
             }
             Err(e) => {
                 self.states[i] = StepState::Failed {

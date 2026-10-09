@@ -288,6 +288,7 @@ tr.gap button:hover { background: var(--accent-weak); }
 /* dialogs */
 .backdrop { position: fixed; inset: 0; background: rgba(10, 14, 22, .45); display: grid; place-items: start center; padding: 8vh 16px 16px; z-index: 20; overflow: auto; }
 .dlg { background: var(--panel); border: 1px solid var(--line-strong); border-radius: 12px; box-shadow: var(--shadow); width: min(640px, 100%); }
+.dlg.wide { width: min(820px, 100%); }
 .dlg header { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
 .dlg header h2 { margin: 0; font-size: 16px; }
 .dlg header .x { margin-left: auto; }
@@ -427,3 +428,14 @@ pre.cmds .pending { color: var(--faint); }
 .pal-label mark { background: none; color: var(--accent); font-weight: 600; }
 .pal-hint { margin-left: auto; color: var(--faint); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 45%; }
 .pal-foot { display: flex; gap: 16px; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
+
+/* cherry-pick conflict */
+.pick { border: 1px solid var(--warn); border-radius: 10px; padding: 12px 14px; display: grid; gap: 10px; background: var(--panel); }
+.pick-h { display: flex; flex-wrap: wrap; gap: 8px; align-items: baseline; }
+.pick-dir { display: flex; gap: 8px; align-items: center; min-width: 0; }
+.pick-dir .mono { flex: 1; min-width: 0; color: var(--muted); }
+.pick-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.pick-files li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; }
+.linklike { border: 0; background: none; padding: 0; text-align: left; color: var(--accent); min-width: 0; }
+.linklike:hover { text-decoration: underline; }
+.pick-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }

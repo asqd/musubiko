@@ -142,6 +142,21 @@ export interface HotfixInput {
 export interface Step {
   title: string;
   args: string[];
+  /** Set on steps that can stop half-way and be finished by hand (a cherry-pick). */
+  resume?: { kind: "cherryPick"; dir: string } | null;
+}
+
+export interface ConflictPath {
+  path: string;
+  code: string;
+  resolved: boolean;
+}
+
+export interface PickState {
+  dir: string;
+  current: Commit | null;
+  remaining: number;
+  files: ConflictPath[];
 }
 
 export interface HotfixPlan {
@@ -296,6 +311,9 @@ export const api = {
   planCheckout: (input: CheckoutInput) => invoke<CheckoutPlan>("plan_checkout", { input }),
   startCheckout: (input: CheckoutInput) => invoke<Operation>("start_checkout", { input }),
   opStep: () => invoke<Operation>("op_step"),
+  opPickState: () => invoke<PickState | null>("op_pick_state"),
+  opPickTake: (path: string, side: "branch" | "commit") => invoke<PickState>("op_pick_take", { path, side }),
+  opResume: (skip: boolean) => invoke<Operation>("op_resume", { skip }),
   opRollback: () => invoke<Operation>("op_rollback"),
   opLeave: () => invoke<Operation>("op_leave"),
   opClose: () => invoke<void>("op_close"),

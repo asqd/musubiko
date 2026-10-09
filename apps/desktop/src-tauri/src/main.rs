@@ -11,8 +11,8 @@ use std::sync::Mutex;
 
 use musubiko_core::{
     Branch, BranchDiff, CheckoutInput, CheckoutPlan, CommitSearch, ConflictFile, DeleteInput,
-    FileDiff, Git, HotfixInput, HotfixPlan, OpPlan, OpStatus, Operation, PortInput, Radar, Repo,
-    RepoInfo,
+    FileDiff, Git, HotfixInput, HotfixPlan, OpPlan, OpStatus, Operation, PickState, PortInput,
+    Radar, Repo, RepoInfo, Side,
 };
 use tauri::{AppHandle, State};
 
@@ -249,6 +249,50 @@ async fn op_step(app: AppHandle, state: State<'_, AppState>) -> Result<Operation
     with_op(&app, &state, |op, repo| op.step(repo)).await
 }
 
+/// Where a cherry-pick stopped on a conflict, for the current operation.
+#[tauri::command]
+async fn op_pick_state(state: State<'_, AppState>) -> Result<Option<PickState>, String> {
+    let repo = state.repo()?;
+    let dir = state
+        .op
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|o| o.stopped_pick().map(str::to_string));
+    match dir {
+        Some(dir) => blocking(move || repo.pick_state(&dir).map(Some)).await,
+        None => Ok(None),
+    }
+}
+
+/// Keeps one side of a conflicting file in the stopped cherry-pick.
+#[tauri::command]
+async fn op_pick_take(
+    path: String,
+    side: Side,
+    state: State<'_, AppState>,
+) -> Result<PickState, String> {
+    let repo = state.repo()?;
+    let dir = state
+        .op
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|o| o.stopped_pick().map(str::to_string))
+        .ok_or("Перенос не стоит на конфликте")?;
+    blocking(move || repo.pick_take(&dir, &path, side)).await
+}
+
+/// Continues the stopped cherry-pick after the conflict was resolved, or skips its commit.
+#[tauri::command]
+async fn op_resume(
+    skip: bool,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Operation, String> {
+    with_op(&app, &state, move |op, repo| op.resume(repo, skip)).await
+}
+
 /// Undoes what the stopped operation already did.
 #[tauri::command]
 async fn op_rollback(app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
@@ -337,6 +381,9 @@ fn main() {
             plan_checkout,
             start_checkout,
             op_step,
+            op_pick_state,
+            op_pick_take,
+            op_resume,
             op_rollback,
             op_leave,
             op_close,

@@ -69,6 +69,17 @@ fn fixture() -> Fixture {
     f
 }
 
+/// The original fix, not its cherry-pick: both carry the same message and often the same second.
+fn the_fix<'a>(f: &Fixture, r: &'a [CommitPlace]) -> &'a CommitPlace {
+    let hash = f
+        .git(&["rev-parse", "hotfix/LT-7-voucher"])
+        .trim()
+        .to_string();
+    r.iter()
+        .find(|p| p.commit.hash == hash)
+        .expect("the original fix")
+}
+
 fn by_subject<'a>(r: &'a [CommitPlace], s: &str) -> &'a CommitPlace {
     r.iter().find(|p| p.commit.subject == s).unwrap_or_else(|| {
         panic!(
@@ -82,7 +93,7 @@ fn by_subject<'a>(r: &'a [CommitPlace], s: &str) -> &'a CommitPlace {
 fn a_shipped_hotfix_shows_its_tag_and_its_copy_in_develop() {
     let f = fixture();
     let s = f.repo().locate("LT-7").unwrap();
-    let p = by_subject(&s.results, "Fix voucher LT-7");
+    let p = the_fix(&f, &s.results);
     assert_eq!(p.master, Presence::Itself);
     assert_eq!(p.first_tag.as_deref(), Some("v1.0.1"));
     assert!(
@@ -148,6 +159,6 @@ fn a_merged_branch_name_still_finds_its_commits() {
     let f = fixture();
     // "LT-7" is in the message too; search by the part that is only in the branch name.
     let s = f.repo().locate("7-voucher").unwrap();
-    let p = by_subject(&s.results, "Fix voucher LT-7");
+    let p = the_fix(&f, &s.results);
     assert_eq!(p.master, Presence::Itself);
 }

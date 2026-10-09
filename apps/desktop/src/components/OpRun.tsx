@@ -98,9 +98,12 @@ export function RunFooter({
               {op.undoError ? "Повторить откат" : "Откатить"}
             </button>
           )}
-          <button className="btn primary" disabled={busy} onClick={() => run(api.opStep)}>
-            Повторить шаг {failedAt + 1}
-          </button>
+          {/* A stopped cherry-pick is finished from its conflict panel, not by running it again. */}
+          {!op.steps[failedAt]?.resume && (
+            <button className="btn primary" disabled={busy} onClick={() => run(api.opStep)}>
+              Повторить шаг {failedAt + 1}
+            </button>
+          )}
         </>
       )}
       {["done", "rolledBack"].includes(op.status) && (

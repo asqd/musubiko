@@ -1,9 +1,10 @@
 // Carrying commits over to the develop side, and deleting branches.
 import { useEffect, useState } from "react";
-import { api, Branch, Commit, errorText, OpPlan, RepoInfo } from "../api";
+import { openPath, revealItemInDir } from "@tauri-apps/plugin-opener";
+import { api, Branch, Commit, errorText, OpPlan, PickState, RepoInfo } from "../api";
 import { StatusPill } from "./Branches";
-import { plural } from "../format";
-import { Dialog, PlanView, RunFooter, StepsView, useOpRunner } from "./OpRun";
+import { copyText, plural } from "../format";
+import { Dialog, OpDone, PlanView, RunFooter, StepsView, useOpRunner } from "./OpRun";
 
 interface PortProps {
   info: RepoInfo;
@@ -44,6 +45,7 @@ export function PortDialog({ info, commits, target: initialTarget, create, onClo
   return (
     <Dialog
       title={runner.op?.title ?? plan?.title ?? (create ? "Создать -dev и перенести" : "Перенести в -dev")}
+      wide
       canClose={runner.canClose}
       onClose={onClose}
       footer={
@@ -62,7 +64,13 @@ export function PortDialog({ info, commits, target: initialTarget, create, onClo
       }
     >
       {runner.op ? (
-        <StepsView op={runner.op} />
+        <>
+          <StepsView op={runner.op} />
+          {runner.op.status === "failed" && runner.op.steps.some((s, i) => s.resume && runner.op!.states[i].kind === "failed") && (
+            <ConflictPanel runner={runner} target={target} />
+          )}
+          {runner.op.status === "done" && <OpDone op={runner.op} />}
+        </>
       ) : (
         <>
           <div className="small">
@@ -95,8 +103,8 @@ export function PortDialog({ info, commits, target: initialTarget, create, onClo
             </label>
           )}
           <div className="hint">
-            Работа идёт во временной папке: ваша текущая ветка и незакоммиченные изменения не затрагиваются. Ветка
-            передвинется, только если все коммиты перенеслись без конфликтов.
+            Работа идёт во временной папке рядом с репозиторием: ваша текущая ветка и незакоммиченные изменения не
+            затрагиваются. Ветка передвинется, только когда все коммиты перенесутся; конфликт можно разрешить по ходу.
           </div>
           <PlanView plan={plan} />
           {planError && <div className="banner bad">{planError}</div>}
@@ -211,5 +219,106 @@ export function DeleteDialog({ info, names, branches, onClose, onChanged }: Dele
       )}
       {runner.error && <div className="banner bad">{runner.error}</div>}
     </Dialog>
+  );
+}
+
+const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
+
+/** A cherry-pick stopped on a conflict: resolve it in the scratch folder and carry on. */
+function ConflictPanel({ runner, target }: { runner: ReturnType<typeof useOpRunner>; target: string }) {
+  const [state, setState] = useState<PickState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const load = () =>
+    api
+      .opPickState()
+      .then((s) => {
+        setState(s);
+        setError(null);
+      })
+      .catch((e) => setError(errorText(e)));
+
+  // Re-read when coming back from the editor.
+  useEffect(() => {
+    void load();
+    const onFocus = () => void load();
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [runner.op]);
+
+  const take = async (path: string, side: "branch" | "commit") => {
+    try {
+      setState(await api.opPickTake(path, side));
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
+  if (!state) return error ? <div className="banner bad">{error}</div> : null;
+  const left = state.files.filter((f) => !f.resolved).length;
+  return (
+    <section className="pick">
+      <div className="pick-h">
+        <b>Конфликт при переносе</b>
+        {state.current && (
+          <span className="small">
+            на коммите <span className="hash">{state.current.short}</span> {state.current.subject}
+          </span>
+        )}
+        {state.remaining > 0 && (
+          <span className="faint small">
+            после него ещё {state.remaining} {plural(state.remaining, "коммит", "коммита", "коммитов")}
+          </span>
+        )}
+      </div>
+      <div className="pick-dir">
+        <span className="mono ell" title={state.dir}>
+          {home(state.dir)}
+        </span>
+        <button className="btn sm" onClick={() => revealItemInDir(state.dir).catch(() => undefined)}>
+          Показать в Finder
+        </button>
+        <button className="btn sm" onClick={async () => setCopied(await copyText(state.dir))}>
+          {copied ? "Скопировано" : "Скопировать путь"}
+        </button>
+      </div>
+      {state.files.length > 0 && (
+        <ul className="pick-files">
+          {state.files.map((f) => (
+            <li key={f.path}>
+              <span className="tag">{f.code}</span>
+              <button className="linklike mono ell" title="Открыть файл" onClick={() => openPath(`${state.dir}/${f.path}`).catch(() => undefined)}>
+                {f.path}
+              </button>
+              <span className={`pill ${f.resolved ? "ok" : "bad"}`}>{f.resolved ? "разрешён" : "есть маркеры"}</span>
+              <button className="btn sm" onClick={() => take(f.path, "branch")} title={`Оставить файл как в ${target}`}>
+                Взять из ветки
+              </button>
+              <button className="btn sm" onClick={() => take(f.path, "commit")} title="Оставить файл как в переносимом коммите">
+                Взять из коммита
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className="hint">
+        Откройте файлы в редакторе, уберите маркеры <span className="mono">{"<<<<<<<"}</span>, <span className="mono">=======</span>,{" "}
+        <span className="mono">{">>>>>>>"}</span> и вернитесь сюда. <span className="mono">git add</span> Musubiko сделает сам.
+      </div>
+      {error && <div className="banner bad">{error}</div>}
+      <div className="pick-actions">
+        <button className="btn ghost" onClick={() => void load()}>
+          Обновить
+        </button>
+        <span className="sp" />
+        <button className="btn" disabled={runner.busy} onClick={() => runner.run(() => api.opResume(true))} title="git cherry-pick --skip">
+          Пропустить коммит
+        </button>
+        <button className="btn primary" disabled={runner.busy || left > 0} onClick={() => runner.run(() => api.opResume(false))}>
+          {left > 0 ? `Осталось разрешить: ${left}` : "Проверить и продолжить"}
+        </button>
+      </div>
+    </section>
   );
 }
