@@ -58,12 +58,16 @@ pub struct RepoInfo {
     pub flow: Flow,
     pub bases: Vec<BaseTip>,
     pub git: String,
+    /// When anything was last fetched (Unix seconds), from FETCH_HEAD.
+    pub last_fetch: Option<i64>,
 }
 
 #[derive(Debug, Default)]
 pub(crate) struct Refs {
     pub local: Option<Commit>,
     pub remote: Option<Commit>,
+    /// The local branch tracks a remote branch that no longer exists (deleted after a merge).
+    pub upstream_gone: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -200,12 +204,13 @@ impl Repo {
             flow: self.flow.clone(),
             bases,
             git: format!("{} {}", self.git.version(), self.git.path().display()),
+            last_fetch: self.last_fetch(),
         })
     }
 
     /// Local and remote-tracking branches by short name. Only the chosen remote is read.
     pub(crate) fn refs(&self) -> Result<BTreeMap<String, Refs>> {
-        let fmt = "--format=%(refname)%00%(objectname)%00%(objectname:short)%00%(subject)%00%(authorname)%00%(authoremail:trim)%00%(committerdate:unix)";
+        let fmt = "--format=%(refname)%00%(objectname)%00%(objectname:short)%00%(subject)%00%(authorname)%00%(authoremail:trim)%00%(committerdate:unix)%00%(upstream:track)";
         let mut args = vec!["for-each-ref", fmt, "refs/heads"];
         let remote_prefix = self.remote.as_ref().map(|r| format!("refs/remotes/{r}/"));
         if let Some(p) = &remote_prefix {
@@ -229,7 +234,9 @@ impl Repo {
                 date: f[6].parse().unwrap_or(0),
             };
             if let Some(name) = f[0].strip_prefix("refs/heads/") {
-                map.entry(name.into()).or_default().local = Some(commit);
+                let e = map.entry(name.into()).or_default();
+                e.local = Some(commit);
+                e.upstream_gone = f.get(7).is_some_and(|t| t.contains("gone"));
             } else if let Some(name) = remote_prefix.as_deref().and_then(|p| f[0].strip_prefix(p)) {
                 if name != "HEAD" {
                     map.entry(name.into()).or_default().remote = Some(commit);
@@ -273,6 +280,13 @@ impl Repo {
             .base_ref(&target, &refs)
             .ok_or_else(|| Error::NoBranch(target.clone()))?;
         Ok((branch_ref, target, target_ref))
+    }
+
+    fn last_fetch(&self) -> Option<i64> {
+        let p = self.run(&["rev-parse", "--git-path", "FETCH_HEAD"]).ok()?;
+        let p = self.root.join(p.trim());
+        let t = std::fs::metadata(p).ok()?.modified().ok()?;
+        Some(t.duration_since(std::time::UNIX_EPOCH).ok()?.as_secs() as i64)
     }
 
     /// Local branch against its remote copy: commits not pushed and not pulled.

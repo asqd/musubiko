@@ -1,16 +1,23 @@
 import { useState } from "react";
 import { RepoInfo } from "../api";
-import { plural } from "../format";
-import { BranchIcon, FlameIcon, Logo, RefreshIcon } from "./Icons";
+import { ago, fullDate, plural } from "../format";
+import { BranchIcon, DownloadIcon, FlameIcon, Logo, RefreshIcon } from "./Icons";
 
 interface Props {
   info: RepoInfo;
   onRefresh: () => Promise<void>;
   onHotfix: () => void;
+  onFetch: () => void;
+  fetching: boolean;
   onSwitch: () => void;
 }
 
-export default function TopBar({ info, onRefresh, onHotfix, onSwitch }: Props) {
+const agoText = (t: number) => {
+  const a = ago(t);
+  return a === "только что" ? a : `${a} назад`;
+};
+
+export default function TopBar({ info, onRefresh, onHotfix, onFetch, fetching, onSwitch }: Props) {
   const [busy, setBusy] = useState(false);
   const n = info.changes.length;
   const changesTitle = info.changes.map((c) => `${c.code.padEnd(2)} ${c.path}`).join("\n");
@@ -40,6 +47,20 @@ export default function TopBar({ info, onRefresh, onHotfix, onSwitch }: Props) {
         )}
       </span>
       <span className="sp" data-tauri-drag-region />
+      {info.remote && (
+        <button
+          className="btn ghost"
+          onClick={onFetch}
+          disabled={fetching}
+          title={`git fetch --prune ${info.remote}: свежие ветки и статусы, удалённые на сервере ветки уходят из списка${
+            info.lastFetch ? `\nПоследний раз: ${fullDate(info.lastFetch)}` : ""
+          }`}
+        >
+          {fetching ? <span className="spin" /> : <DownloadIcon />}
+          {fetching ? "Получаю…" : "Получить"}
+          {!fetching && info.lastFetch && <span className="faint fetch-chip">{agoText(info.lastFetch)}</span>}
+        </button>
+      )}
       <button className="btn ghost" onClick={refresh} disabled={busy} title="Перечитать репозиторий (⌘R)">
         {busy ? <span className="spin" /> : <RefreshIcon />}
         Обновить

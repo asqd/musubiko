@@ -82,6 +82,11 @@ pub enum Effect {
         name: String,
         hash: String,
     },
+    /// Several remote branches `(name, hash)` were deleted in one push; undo pushes them back.
+    DeleteRemoteMany {
+        remote: String,
+        items: Vec<(String, String)>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -400,6 +405,18 @@ impl Repo {
                 format!("Восстановить {name} на {remote}"),
                 &["push", remote, &format!("{hash}:refs/heads/{name}")],
             ),
+            Effect::DeleteRemoteMany { remote, items } => {
+                let mut args = vec!["push".to_string(), "--atomic".into(), remote.clone()];
+                args.extend(items.iter().map(|(n, h)| format!("{h}:refs/heads/{n}")));
+                let names: Vec<&str> = items.iter().map(|(n, _)| n.as_str()).collect();
+                Step {
+                    args,
+                    ..Step::new(
+                        format!("Восстановить на {remote}: {}", names.join(", ")),
+                        &[],
+                    )
+                }
+            }
         })
     }
 }

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, Branch, errorText, RepoInfo, Status } from "../api";
 import { ago, copyText, fullDate, plural } from "../format";
-import { CopyIcon, SearchIcon } from "./Icons";
+import { CopyIcon, SearchIcon, TrashIcon } from "./Icons";
+import { DeleteDialog } from "./OpDialogs";
 
-type Filter = "all" | "open" | "merged" | "conflict" | "stale" | "unpushed";
+type Filter = "all" | "open" | "merged" | "gone" | "conflict" | "stale" | "unpushed";
 
 const STALE_DAYS = 30;
 const isMerged = (s: Status) => s.kind === "merged" || s.kind === "squashed";
@@ -15,6 +16,8 @@ function matches(b: Branch, f: Filter, now: number): boolean {
       return b.status.kind === "open" || b.status.kind === "conflict";
     case "merged":
       return isMerged(b.status);
+    case "gone":
+      return b.upstreamGone;
     case "conflict":
       return b.status.kind === "conflict";
     case "stale":
@@ -73,9 +76,11 @@ interface Props {
   /** False while another view covers the list: keyboard shortcuts stay quiet. */
   active: boolean;
   onOpen: (branch: Branch, base: string) => void;
+  /** Branches were deleted or restored: re-read the repository. */
+  onChanged: () => void;
 }
 
-export default function Branches({ info, tick, active, onOpen }: Props) {
+export default function Branches({ info, tick, active, onOpen, onChanged }: Props) {
   const baseNames = info.bases.map((b) => b.name);
   const defaultBase = info.bases.find((b) => b.role === "develop")?.name ?? baseNames[0] ?? info.flow.master;
   const [base, setBase] = useState(defaultBase);
@@ -87,6 +92,8 @@ export default function Branches({ info, tick, active, onOpen }: Props) {
   const [mine, setMine] = useState(false);
   const [q, setQ] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState<Branch[] | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const request = useRef(0);
 
@@ -104,6 +111,8 @@ export default function Branches({ info, tick, active, onOpen }: Props) {
       .then((l) => {
         if (id !== request.current) return;
         setList(l);
+        // Keep only the selection that still exists.
+        setSelected((s) => new Set(l.filter((b) => s.has(b.name)).map((b) => b.name)));
         setTook(performance.now() - started);
       })
       .catch((e) => id === request.current && setError(errorText(e)))
@@ -147,6 +156,28 @@ export default function Branches({ info, tick, active, onOpen }: Props) {
 
   const count = (f: Filter) => scoped.filter((b) => matches(b, f, now)).length;
 
+  // The current branch cannot be deleted, so it cannot be selected either.
+  const selectable = rows.filter((b) => !b.isHead);
+  const allSelected = selectable.length > 0 && selectable.every((b) => selected.has(b.name));
+  const toggle = (name: string) =>
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(name)) n.delete(name);
+      else n.add(name);
+      return n;
+    });
+  const toggleAll = () =>
+    setSelected((s) => {
+      const n = new Set(s);
+      for (const b of selectable) {
+        if (allSelected) n.delete(b.name);
+        else n.add(b.name);
+      }
+      return n;
+    });
+  const picked = (list ?? []).filter((b) => selected.has(b.name));
+  const pickedUnmerged = picked.filter((b) => !isMerged(b.status)).length;
+
   const copy = async (text: string) => {
     setToast((await copyText(text)) ? `Скопировано: ${text}` : "Не удалось скопировать");
     window.setTimeout(() => setToast(null), 2500);
@@ -156,6 +187,7 @@ export default function Branches({ info, tick, active, onOpen }: Props) {
     ["all", "Все"],
     ["open", "Не слиты"],
     ["merged", "Слиты"],
+    ["gone", "Удалены на сервере"],
     ["conflict", "Конфликт"],
     ["stale", "Старые"],
     ["unpushed", "Не запушены"],
@@ -257,6 +289,15 @@ export default function Branches({ info, tick, active, onOpen }: Props) {
           <table className={`br ${loading ? "stale-data" : ""}`}>
             <thead>
               <tr>
+                <th className="cb">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    aria-label="Выбрать все показанные"
+                    title="Выбрать все показанные (с учётом фильтра)"
+                  />
+                </th>
                 <th>Ветка</th>
                 <th>Статус</th>
                 <th title="Коммитов впереди / позади целевой ветки">↑ ↓</th>
@@ -268,13 +309,51 @@ export default function Branches({ info, tick, active, onOpen }: Props) {
             </thead>
             <tbody>
               {rows.map((b) => (
-                <Row key={b.name} b={b} info={info} base={base} now={now} onCopy={copy} onOpen={() => onOpen(b, base)} />
+                <Row
+                  key={b.name}
+                  b={b}
+                  info={info}
+                  base={base}
+                  now={now}
+                  selected={selected.has(b.name)}
+                  onSelect={() => toggle(b.name)}
+                  onCopy={copy}
+                  onOpen={() => onOpen(b, base)}
+                />
               ))}
             </tbody>
           </table>
         )}
       </div>
+      {picked.length > 0 && (
+        <div className="bulk">
+          <b>
+            Выбрано {picked.length} {plural(picked.length, "ветка", "ветки", "веток")}
+          </b>
+          <span className="muted small">{pickedUnmerged > 0 ? `из них не слиты: ${pickedUnmerged}` : "все слиты"}</span>
+          <span className="sp" />
+          <button className="btn ghost" onClick={() => setSelected(new Set())}>
+            Снять выделение
+          </button>
+          <button className="btn danger" onClick={() => setDeleting(picked)}>
+            <TrashIcon />
+            Удалить…
+          </button>
+        </div>
+      )}
       {toast && <div className="toast">{toast}</div>}
+      {deleting && (
+        <DeleteDialog
+          info={info}
+          names={deleting.map((b) => b.name)}
+          branches={deleting}
+          onClose={() => setDeleting(null)}
+          onChanged={() => {
+            setSelected(new Set());
+            onChanged();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -284,11 +363,13 @@ interface RowProps {
   info: RepoInfo;
   base: string;
   now: number;
+  selected: boolean;
+  onSelect: () => void;
   onCopy: (t: string) => void;
   onOpen: () => void;
 }
 
-function Row({ b, info, base, now, onCopy, onOpen }: RowProps) {
+function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen }: RowProps) {
   const slash = b.name.indexOf("/");
   const pre = slash > 0 ? b.name.slice(0, slash + 1) : "";
   const rest = slash > 0 ? b.name.slice(slash + 1) : b.name;
@@ -297,12 +378,22 @@ function Row({ b, info, base, now, onCopy, onOpen }: RowProps) {
   const owner = b.owner.name || b.tip.author.name;
   return (
     <tr
-      className={`${pair ? "pair" : ""} ${b.isHead ? "headrow" : ""}`}
+      className={`${pair ? "pair" : ""} ${b.isHead ? "headrow" : ""} ${selected ? "sel" : ""}`}
       onClick={onOpen}
       onKeyDown={(e) => e.key === "Enter" && onOpen()}
       tabIndex={0}
       title="Открыть дифф"
     >
+      <td className="cb" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onSelect}
+          disabled={b.isHead}
+          title={b.isHead ? "Текущую ветку удалить нельзя" : undefined}
+          aria-label={`Выбрать ${b.name}`}
+        />
+      </td>
       <td>
         <div className="bname">
           {b.isHead ? <span className="hd" title="HEAD" /> : <span className="nohd" />}
@@ -312,7 +403,12 @@ function Row({ b, info, base, now, onCopy, onOpen }: RowProps) {
           </span>
           {b.isHead && <span className="tag headtag">HEAD</span>}
           {b.location === "remote" && <span className="tag" title="Есть только на сервере">{info.remote ?? "remote"}</span>}
-          {b.location === "local" && <span className="tag" title="Не запушена">локальная</span>}
+          {b.location === "local" && !b.upstreamGone && <span className="tag" title="Не запушена">локальная</span>}
+          {b.upstreamGone && (
+            <span className="tag warn" title="Ветку удалили на сервере, обычно после мержа merge request">
+              удалена на сервере
+            </span>
+          )}
           {b.sync && b.sync.ahead > 0 && <span className="tag warn" title="Локальные коммиты, которых нет на сервере">↑{b.sync.ahead} не запушено</span>}
           {b.sync && b.sync.behind > 0 && <span className="tag" title="На сервере есть коммиты, которых нет локально">↓{b.sync.behind} на сервере</span>}
         </div>

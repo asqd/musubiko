@@ -25,6 +25,7 @@ export default function App() {
   const [radarError, setRadarError] = useState<string | null>(null);
   const [radarLoading, setRadarLoading] = useState(false);
   const [hotfixOpen, setHotfixOpen] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const listScroll = useRef(0);
 
   useEffect(() => {
@@ -110,6 +111,29 @@ export default function App() {
     };
   }, [info?.root, tick]);
 
+  // git fetch --prune as a journaled operation; a failure is shown and the operation closed.
+  const fetchNow = async () => {
+    if (fetching) return;
+    setFetching(true);
+    setError(null);
+    try {
+      let op = await api.startFetch();
+      while (op.status === "running") op = await api.opStep();
+      if (op.status === "failed") {
+        const failed = op.states.find((s) => s.kind === "failed");
+        setError(`Не получилось обновиться с сервера: ${failed && failed.kind === "failed" ? failed.error : ""}`);
+        await api.opLeave();
+      } else {
+        await api.opClose();
+      }
+      await refresh();
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setFetching(false);
+    }
+  };
+
   const openDiff = (branch: Branch, base: string) => {
     listScroll.current = mainRef.current?.scrollTop ?? 0;
     setDiffOf({ branch, base });
@@ -139,6 +163,8 @@ export default function App() {
         info={info}
         onRefresh={refresh}
         onHotfix={() => setHotfixOpen(true)}
+        onFetch={fetchNow}
+        fetching={fetching}
         onSwitch={() => {
           setInfo(null);
           setDiffOf(null);
@@ -194,7 +220,13 @@ export default function App() {
         )}
         {/* The list stays mounted under the diff so going back keeps filters and scroll. */}
         <div hidden={!!diffOf || view !== "branches"}>
-          <Branches info={info} tick={tick} active={!diffOf && view === "branches" && !hotfixOpen} onOpen={openDiff} />
+          <Branches
+            info={info}
+            tick={tick}
+            active={!diffOf && view === "branches" && !hotfixOpen}
+            onOpen={openDiff}
+            onChanged={refresh}
+          />
         </div>
         <div hidden={!!diffOf || view !== "hotfixes"}>
           <Radar

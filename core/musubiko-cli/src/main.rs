@@ -48,7 +48,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     _ => After::Stay,
                 }
             }
-            _ if matches!(cmd.as_str(), "diff" | "conflicts" | "hotfix") && branch.is_none() => branch = Some(a),
+            _ if matches!(cmd.as_str(), "diff" | "conflicts" | "hotfix") && branch.is_none() => {
+                branch = Some(a)
+            }
             _ => path = PathBuf::from(a),
         }
     }
@@ -64,17 +66,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             println!("{}  ({})", info.name, info.root.display());
             println!("git      {}", info.git);
-            println!("HEAD     {} {}", info.head.as_deref().unwrap_or("(detached)"), info.head_short);
+            println!(
+                "HEAD     {} {}",
+                info.head.as_deref().unwrap_or("(detached)"),
+                info.head_short
+            );
             println!("remote   {}", info.remote.as_deref().unwrap_or("—"));
             for b in &info.bases {
-                println!("{:<8} {} {} {}", b.role, b.ref_name, b.tip.short, b.tip.subject);
+                println!(
+                    "{:<8} {} {} {}",
+                    b.role, b.ref_name, b.tip.short, b.tip.subject
+                );
             }
             for c in &info.changes {
                 println!("  {:>2} {}", c.code, c.path);
             }
         }
         "branches" => {
-            let base = match base { Some(b) => b, None => repo.default_base()? };
+            let base = match base {
+                Some(b) => b,
+                None => repo.default_base()?,
+            };
             let started = Instant::now();
             let list = repo.branches(&base)?;
             if json {
@@ -113,21 +125,43 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "diff" => {
             let branch = branch.ok_or("укажите ветку: musubiko diff BRANCH [PATH]")?;
-            let base = match base { Some(b) => b, None => repo.default_base()? };
+            let base = match base {
+                Some(b) => b,
+                None => repo.default_base()?,
+            };
             let started = Instant::now();
             let d = repo.branch_diff(&branch, &base, ignore_ws)?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&d)?);
                 return Ok(());
             }
-            println!("{} → {}  merge-base {} · {} коммитов", d.branch, d.target, d.merge_base.short, d.commits.len());
+            println!(
+                "{} → {}  merge-base {} · {} коммитов",
+                d.branch,
+                d.target,
+                d.merge_base.short,
+                d.commits.len()
+            );
             for c in &d.commits {
                 println!("  {} {}", c.short, c.subject);
             }
             for f in &d.files {
-                let from = f.old_path.as_deref().map(|p| format!("{p} → ")).unwrap_or_default();
-                let flags = if f.binary { " [binary]" } else if f.truncated { " [truncated]" } else { "" };
-                println!("  {:?} {from}{}  +{} −{}{flags}", f.change, f.path, f.additions, f.deletions);
+                let from = f
+                    .old_path
+                    .as_deref()
+                    .map(|p| format!("{p} → "))
+                    .unwrap_or_default();
+                let flags = if f.binary {
+                    " [binary]"
+                } else if f.truncated {
+                    " [truncated]"
+                } else {
+                    ""
+                };
+                println!(
+                    "  {:?} {from}{}  +{} −{}{flags}",
+                    f.change, f.path, f.additions, f.deletions
+                );
             }
             for c in repo.conflicts(&branch, &base)? {
                 println!("  конфликт {} ({} мест)", c.path, c.regions.len());
@@ -136,27 +170,50 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         "conflicts" => {
             let branch = branch.ok_or("укажите ветку: musubiko conflicts BRANCH [PATH]")?;
-            let base = match base { Some(b) => b, None => repo.default_base()? };
+            let base = match base {
+                Some(b) => b,
+                None => repo.default_base()?,
+            };
             let list = repo.conflicts(&branch, &base)?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&list)?);
                 return Ok(());
             }
             for c in &list {
-                println!("{} ({} мест){}", c.path, c.regions.len(), c.note.as_deref().map(|n| format!(" — {n}")).unwrap_or_default());
+                println!(
+                    "{} ({} мест){}",
+                    c.path,
+                    c.regions.len(),
+                    c.note
+                        .as_deref()
+                        .map(|n| format!(" — {n}"))
+                        .unwrap_or_default()
+                );
                 for r in &c.regions {
-                    println!("  строка {}: {} ↔ {} строк", r.line, r.base.len(), r.branch.len());
+                    println!(
+                        "  строка {}: {} ↔ {} строк",
+                        r.line,
+                        r.base.len(),
+                        r.branch.len()
+                    );
                 }
             }
         }
         "hotfix" => {
-            let input = HotfixInput { name: branch.ok_or("укажите название: musubiko hotfix NAME [PATH]")?, push, after };
+            let input = HotfixInput {
+                name: branch.ok_or("укажите название: musubiko hotfix NAME [PATH]")?,
+                push,
+                after,
+            };
             let plan = repo.plan_hotfix(&input)?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&plan)?);
                 return Ok(());
             }
-            println!("{} ← {}\n{} ← {}", plan.master_branch, plan.master_from, plan.dev_branch, plan.dev_from);
+            println!(
+                "{} ← {}\n{} ← {}",
+                plan.master_branch, plan.master_from, plan.dev_branch, plan.dev_from
+            );
             for p in &plan.problems {
                 println!("! {p}");
             }
@@ -173,7 +230,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 op.step(&repo);
                 match &op.states[i] {
                     StepState::Done { .. } => println!("✓ {}", op.steps[i].command()),
-                    StepState::Failed { error } => println!("✗ {}\n  {error}", op.steps[i].command()),
+                    StepState::Failed { error } => {
+                        println!("✗ {}\n  {error}", op.steps[i].command())
+                    }
                     StepState::Pending => {}
                 }
             }
@@ -189,9 +248,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             for p in &r.pairs {
-                println!("{:<10?} {}  ({} коммитов, не перенесено {})", p.state, p.master_branch, p.commits.len(), p.unsynced);
+                println!(
+                    "{:<10?} {}  ({} коммитов, не перенесено {})",
+                    p.state,
+                    p.master_branch,
+                    p.commits.len(),
+                    p.unsynced
+                );
                 for c in &p.commits {
-                    let to = c.ported.as_ref().map(|x| format!("→ {} в {}", x.short, x.place)).unwrap_or_else(|| "✗ не перенесён".into());
+                    let to = c
+                        .ported
+                        .as_ref()
+                        .map(|x| format!("→ {} в {}", x.short, x.place))
+                        .unwrap_or_else(|| "✗ не перенесён".into());
                     println!("    {} {:<50} {to}", c.commit.short, c.commit.subject);
                 }
                 if let Some(n) = &p.note {
@@ -199,17 +268,33 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
             if let Some(d) = r.develop_stale_days {
-                println!("{} отстаёт от {} на {d} дней: похоже, репозиторий живёт без {}", r.develop, r.master, r.develop);
+                println!(
+                    "{} отстаёт от {} на {d} дней: похоже, репозиторий живёт без {}",
+                    r.develop, r.master, r.develop
+                );
             }
             if !r.lost.is_empty() {
-                println!("В {}, но не в {} (за {} дней):", r.master, r.develop, r.recent_days);
+                println!(
+                    "В {}, но не в {} (за {} дней):",
+                    r.master, r.develop, r.recent_days
+                );
                 for c in &r.lost {
                     println!("    {} {} — {}", c.short, c.subject, c.author.name);
                 }
             }
-            eprintln!("{} пар, старых скрыто {}, за {:.1?}", r.pairs.len(), r.older_hidden, started.elapsed());
+            eprintln!(
+                "{} пар, старых скрыто {}, за {:.1?}",
+                r.pairs.len(),
+                r.older_hidden,
+                started.elapsed()
+            );
         }
-        other => return Err(format!("неизвестная команда {other}; есть branches, diff, conflicts, hotfix, radar и info").into()),
+        other => {
+            return Err(format!(
+                "неизвестная команда {other}; есть branches, diff, conflicts, hotfix, radar и info"
+            )
+            .into());
+        }
     }
     Ok(())
 }

@@ -10,8 +10,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use musubiko_core::{
-    Branch, BranchDiff, ConflictFile, DeleteInput, FileDiff, Git, HotfixInput, HotfixPlan, OpPlan, OpStatus, Operation, PortInput,
-    Radar, Repo, RepoInfo,
+    Branch, BranchDiff, ConflictFile, DeleteInput, FileDiff, Git, HotfixInput, HotfixPlan, OpPlan,
+    OpStatus, Operation, PortInput, Radar, Repo, RepoInfo,
 };
 use tauri::{AppHandle, State};
 
@@ -33,7 +33,11 @@ impl AppState {
     }
 
     fn repo(&self) -> Result<Repo, String> {
-        self.repo.lock().unwrap().clone().ok_or_else(|| "Репозиторий не открыт".to_string())
+        self.repo
+            .lock()
+            .unwrap()
+            .clone()
+            .ok_or_else(|| "Репозиторий не открыт".to_string())
     }
 }
 
@@ -47,7 +51,11 @@ async fn blocking<T: Send + 'static>(
 }
 
 #[tauri::command]
-async fn open_repo(path: String, app: AppHandle, state: State<'_, AppState>) -> Result<RepoInfo, String> {
+async fn open_repo(
+    path: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<RepoInfo, String> {
     let git = state.git()?;
     let (repo, info) = blocking(move || {
         let repo = Repo::open(git, &PathBuf::from(path))?;
@@ -84,19 +92,31 @@ async fn branch_diff(
 }
 
 #[tauri::command]
-async fn commit_diff(hash: String, ignore_whitespace: bool, state: State<'_, AppState>) -> Result<Vec<FileDiff>, String> {
+async fn commit_diff(
+    hash: String,
+    ignore_whitespace: bool,
+    state: State<'_, AppState>,
+) -> Result<Vec<FileDiff>, String> {
     let repo = state.repo()?;
     blocking(move || repo.commit_diff(&hash, ignore_whitespace)).await
 }
 
 #[tauri::command]
-async fn file_lines(rev: String, path: String, state: State<'_, AppState>) -> Result<Vec<String>, String> {
+async fn file_lines(
+    rev: String,
+    path: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<String>, String> {
     let repo = state.repo()?;
     blocking(move || repo.file_lines(&rev, &path)).await
 }
 
 #[tauri::command]
-async fn conflicts(branch: String, base: String, state: State<'_, AppState>) -> Result<Vec<ConflictFile>, String> {
+async fn conflicts(
+    branch: String,
+    base: String,
+    state: State<'_, AppState>,
+) -> Result<Vec<ConflictFile>, String> {
     let repo = state.repo()?;
     blocking(move || repo.conflicts(&branch, &base)).await
 }
@@ -113,7 +133,13 @@ async fn start_op(
     state: &State<'_, AppState>,
     f: impl FnOnce(&Repo) -> musubiko_core::Result<Operation> + Send + 'static,
 ) -> Result<Operation, String> {
-    if state.op.lock().unwrap().as_ref().is_some_and(|o| matches!(o.status, OpStatus::Running | OpStatus::Failed)) {
+    if state
+        .op
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|o| matches!(o.status, OpStatus::Running | OpStatus::Failed))
+    {
         return Err("Уже идёт другая операция".into());
     }
     let repo = state.repo()?;
@@ -124,7 +150,11 @@ async fn start_op(
 }
 
 #[tauri::command]
-async fn start_hotfix(input: HotfixInput, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+async fn start_hotfix(
+    input: HotfixInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Operation, String> {
     start_op(&app, &state, move |repo| repo.start_hotfix(&input)).await
 }
 
@@ -141,8 +171,17 @@ async fn plan_port(input: PortInput, state: State<'_, AppState>) -> Result<OpPla
 }
 
 #[tauri::command]
-async fn start_port(input: PortInput, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+async fn start_port(
+    input: PortInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Operation, String> {
     start_op(&app, &state, move |repo| repo.start_port(&input)).await
+}
+
+#[tauri::command]
+async fn start_fetch(app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+    start_op(&app, &state, |repo| repo.start_fetch()).await
 }
 
 #[tauri::command]
@@ -152,7 +191,11 @@ async fn plan_delete(input: DeleteInput, state: State<'_, AppState>) -> Result<O
 }
 
 #[tauri::command]
-async fn start_delete(input: DeleteInput, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+async fn start_delete(
+    input: DeleteInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Operation, String> {
     start_op(&app, &state, move |repo| repo.start_delete(&input)).await
 }
 
@@ -184,7 +227,10 @@ async fn op_step(app: AppHandle, state: State<'_, AppState>) -> Result<Operation
 /// Undoes what the stopped operation already did.
 #[tauri::command]
 async fn op_rollback(app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
-    with_op(&app, &state, |op, repo| op.undo_all(repo, OpStatus::RolledBack)).await
+    with_op(&app, &state, |op, repo| {
+        op.undo_all(repo, OpStatus::RolledBack)
+    })
+    .await
 }
 
 /// Keeps what the stopped operation did and closes it.
@@ -198,7 +244,10 @@ async fn op_leave(app: AppHandle, state: State<'_, AppState>) -> Result<Operatio
 #[tauri::command]
 fn op_close(state: State<'_, AppState>) {
     let mut op = state.op.lock().unwrap();
-    if op.as_ref().is_some_and(|o| !matches!(o.status, OpStatus::Running | OpStatus::Failed)) {
+    if op
+        .as_ref()
+        .is_some_and(|o| !matches!(o.status, OpStatus::Running | OpStatus::Failed))
+    {
         *op = None;
     }
 }
@@ -211,7 +260,11 @@ fn journal_list(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<Operat
 
 /// Undoes a finished operation from the journal, guarded against later changes.
 #[tauri::command]
-async fn journal_undo(id: String, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+async fn journal_undo(
+    id: String,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Operation, String> {
     let git = state.git()?;
     let mut op = journal::get(&app, &id).ok_or("Операции нет в журнале")?;
     let op = blocking(move || {
@@ -254,6 +307,7 @@ fn main() {
             start_port,
             plan_delete,
             start_delete,
+            start_fetch,
             op_step,
             op_rollback,
             op_leave,

@@ -225,9 +225,17 @@ fn deletes_a_finished_pair_and_brings_it_back() {
         remote: true,
     };
     let plan = repo.plan_delete(&input).unwrap();
-    assert!(
-        plan.problems.is_empty() && plan.warnings.is_empty(),
-        "{plan:?}"
+    assert!(plan.problems.is_empty(), "{plan:?}");
+    // The fixture's commits are by Tester while the repository's user is Me.
+    assert_eq!(plan.warnings.len(), 1, "{plan:?}");
+    assert!(plan.warnings[0].contains("других авторов"));
+    assert_eq!(
+        plan.commands
+            .iter()
+            .filter(|c| c.starts_with("git push"))
+            .count(),
+        1,
+        "one atomic push"
     );
     let mut op = repo.start_delete(&input).unwrap();
     run(&mut op, &repo);

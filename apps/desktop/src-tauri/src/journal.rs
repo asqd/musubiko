@@ -9,7 +9,10 @@ use tauri::{AppHandle, Manager};
 const LIMIT: usize = 300;
 
 fn file(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_data_dir().ok().map(|d| d.join("journal.json"))
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join("journal.json"))
 }
 
 fn load(app: &AppHandle) -> Vec<Operation> {

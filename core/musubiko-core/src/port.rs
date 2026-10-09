@@ -265,6 +265,7 @@ impl Repo {
         let mut problems = Vec::new();
         let mut warnings = Vec::new();
         let mut steps = Vec::new();
+        let mut remote_items: Vec<(String, String)> = Vec::new();
         let unmerged: Vec<&str> = statuses
             .iter()
             .filter(|b| !matches!(b.status, Status::Merged | Status::Squashed))
@@ -309,24 +310,55 @@ impl Repo {
                     }),
                 );
             }
-            if let (true, Some(rm), Some(t)) = (input.remote, &self.remote, &r.remote) {
-                steps.push(
-                    Step::new(
-                        format!("Удалить {name} на {rm}"),
-                        &[
-                            "push",
-                            &format!("--force-with-lease=refs/heads/{name}:{}", t.hash),
-                            rm,
-                            "--delete",
-                            name,
-                        ],
-                    )
-                    .with_effect(Effect::DeleteRemote {
-                        remote: rm.clone(),
-                        name: name.clone(),
-                        hash: t.hash.clone(),
-                    }),
-                );
+            if let (true, Some(_), Some(t)) = (input.remote, &self.remote, &r.remote) {
+                remote_items.push((name.clone(), t.hash.clone()));
+            }
+        }
+        // One atomic push for all remote deletions: either all go or none, and one network trip.
+        if let (false, Some(rm)) = (remote_items.is_empty(), &self.remote) {
+            let mut args: Vec<String> = vec!["push".into(), "--atomic".into()];
+            args.extend(
+                remote_items
+                    .iter()
+                    .map(|(n, h)| format!("--force-with-lease=refs/heads/{n}:{h}")),
+            );
+            args.extend([rm.clone(), "--delete".into()]);
+            args.extend(remote_items.iter().map(|(n, _)| n.clone()));
+            let title = if remote_items.len() == 1 {
+                format!("Удалить {} на {rm}", remote_items[0].0)
+            } else {
+                format!(
+                    "Удалить {} {} на {rm}",
+                    remote_items.len(),
+                    plural(remote_items.len(), "ветку", "ветки", "веток")
+                )
+            };
+            steps.push(
+                Step {
+                    args,
+                    ..Step::new(title, &[])
+                }
+                .with_effect(Effect::DeleteRemoteMany {
+                    remote: rm.clone(),
+                    items: remote_items.clone(),
+                }),
+            );
+            let me = self
+                .run(&["config", "user.email"])
+                .unwrap_or_default()
+                .trim()
+                .to_lowercase();
+            let others: Vec<String> = statuses
+                .iter()
+                .filter(|b| remote_items.iter().any(|(n, _)| *n == b.name))
+                .filter(|b| me.is_empty() || b.owner.email.to_lowercase() != me)
+                .map(|b| format!("{} ({})", b.name, b.owner.name))
+                .collect();
+            if !others.is_empty() {
+                warnings.push(format!(
+                    "На {rm} удалятся ветки других авторов: {}",
+                    others.join(", ")
+                ));
             }
         }
         if steps.is_empty() && problems.is_empty() {
@@ -343,6 +375,33 @@ impl Repo {
 
     pub fn start_delete(&self, input: &DeleteInput) -> Result<Operation> {
         self.plan_delete(input)?.into_operation(self)
+    }
+
+    /// Fetches everything and drops remote-tracking branches deleted on the server, so merged
+    /// statuses and "deleted on the server" are current. Nothing to undo: it only reads.
+    pub fn plan_fetch(&self) -> Result<OpPlan> {
+        let Some(rm) = self.remote.clone() else {
+            return Ok(OpPlan::new(
+                "Получить с сервера".into(),
+                Vec::new(),
+                vec!["У репозитория нет remote".into()],
+                Vec::new(),
+            ));
+        };
+        let steps = vec![Step::new(
+            format!("Получить изменения с {rm} и убрать удалённые там ветки"),
+            &["fetch", "--prune", &rm],
+        )];
+        Ok(OpPlan::new(
+            format!("Получить с {rm}"),
+            steps,
+            Vec::new(),
+            Vec::new(),
+        ))
+    }
+
+    pub fn start_fetch(&self) -> Result<Operation> {
+        self.plan_fetch()?.into_operation(self)
     }
 
     /// The folder where `branch` is checked out, if any (this one or another worktree).

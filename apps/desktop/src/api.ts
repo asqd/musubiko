@@ -40,6 +40,8 @@ export interface Branch {
   behind: number;
   owner: Person;
   isHead: boolean;
+  /** The upstream was deleted on the server, usually after the merge request. */
+  upstreamGone: boolean;
 }
 
 export interface Change {
@@ -73,6 +75,8 @@ export interface RepoInfo {
   flow: Flow;
   bases: BaseTip[];
   git: string;
+  /** Unix seconds of the last fetch, from FETCH_HEAD. */
+  lastFetch: number | null;
 }
 
 export type FileChange = "added" | "deleted" | "modified" | "renamed" | "copied";
@@ -246,6 +250,7 @@ export const api = {
   startPort: (input: PortInput) => invoke<Operation>("start_port", { input }),
   planDelete: (input: DeleteInput) => invoke<OpPlan>("plan_delete", { input }),
   startDelete: (input: DeleteInput) => invoke<Operation>("start_delete", { input }),
+  startFetch: () => invoke<Operation>("start_fetch"),
   opStep: () => invoke<Operation>("op_step"),
   opRollback: () => invoke<Operation>("op_rollback"),
   opLeave: () => invoke<Operation>("op_leave"),

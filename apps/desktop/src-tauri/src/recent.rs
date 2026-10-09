@@ -7,7 +7,10 @@ use tauri::{AppHandle, Manager};
 const LIMIT: usize = 12;
 
 fn file(app: &AppHandle) -> Option<PathBuf> {
-    app.path().app_data_dir().ok().map(|d| d.join("recent.json"))
+    app.path()
+        .app_data_dir()
+        .ok()
+        .map(|d| d.join("recent.json"))
 }
 
 pub fn list(app: &AppHandle) -> Vec<String> {

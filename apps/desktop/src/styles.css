@@ -383,3 +383,10 @@ pre.cmds .pending { color: var(--faint); }
 .clist-plain { list-style: none; margin: 0; padding: 8px 12px; background: var(--sunken); border-radius: 8px; display: grid; gap: 3px; font-size: 13px; max-height: 200px; overflow: auto; }
 .opts-row { display: flex; gap: 18px; flex-wrap: wrap; }
 .btn.danger.solid { background: var(--bad); color: #fff; }
+
+/* branch selection */
+.br th.cb, .br td.cb { width: 30px; padding-right: 0; }
+.br tr.sel td { background: var(--accent-weak); }
+.bulk { position: sticky; bottom: 12px; margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow); z-index: 3; }
+.clist-plain.dl li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; }
+.fetch-chip { font-size: 12px; }

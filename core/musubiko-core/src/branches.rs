@@ -59,6 +59,8 @@ pub struct Branch {
     /// Author of the branch's first own commit; git does not record who created a branch.
     pub owner: Person,
     pub is_head: bool,
+    /// The local branch's upstream was deleted on the server, usually after its merge request.
+    pub upstream_gone: bool,
 }
 
 impl Repo {
@@ -150,6 +152,7 @@ impl Repo {
             ahead: 0,
             behind: 0,
             is_head: head == Some(name),
+            upstream_gone: r.upstream_gone,
         };
         let Some(Some((target_ref, target_tree))) = targets.get(&target) else {
             return Ok(out);

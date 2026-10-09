@@ -1,6 +1,7 @@
 // Carrying commits over to the develop side, and deleting branches.
 import { useEffect, useState } from "react";
-import { api, Commit, errorText, OpPlan, RepoInfo } from "../api";
+import { api, Branch, Commit, errorText, OpPlan, RepoInfo } from "../api";
+import { StatusPill } from "./Branches";
 import { plural } from "../format";
 import { Dialog, PlanView, RunFooter, StepsView, useOpRunner } from "./OpRun";
 
@@ -109,11 +110,13 @@ export function PortDialog({ info, commits, target: initialTarget, create, onClo
 interface DeleteProps {
   info: RepoInfo;
   names: string[];
+  /** Details for the list: status and where each branch lives. */
+  branches?: Branch[];
   onClose: () => void;
   onChanged: () => void;
 }
 
-export function DeleteDialog({ info, names, onClose, onChanged }: DeleteProps) {
+export function DeleteDialog({ info, names, branches, onClose, onChanged }: DeleteProps) {
   const [local, setLocal] = useState(true);
   const [remote, setRemote] = useState(true);
   const [ack, setAck] = useState(false);
@@ -161,12 +164,27 @@ export function DeleteDialog({ info, names, onClose, onChanged }: DeleteProps) {
         <StepsView op={runner.op} />
       ) : (
         <>
-          <ul className="clist-plain">
-            {names.map((n) => (
-              <li key={n} className="mono">
-                {n}
-              </li>
-            ))}
+          <ul className="clist-plain dl">
+            {names.map((n) => {
+              const b = branches?.find((x) => x.name === n);
+              return (
+                <li key={n}>
+                  <span className="mono ell">{n}</span>
+                  {b && <StatusPill status={b.status} target={b.target} />}
+                  {b && (
+                    <span className="faint small nowrap">
+                      {b.upstreamGone
+                        ? "только локально, на сервере удалена"
+                        : b.location === "both"
+                          ? `локально и на ${info.remote}`
+                          : b.location === "local"
+                            ? "только локально"
+                            : `только на ${info.remote}`}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
           <div className="opts-row">
             <label className="opt">
