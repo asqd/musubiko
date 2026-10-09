@@ -238,7 +238,11 @@ table.d td.cd { width: 100%; }
 /* Split: two fixed halves that wrap long lines, so the right side never leaves the screen. */
 table.d.split { table-layout: fixed; }
 table.d.split col.c-no { width: 52px; }
-table.d.split td.cd { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Unified cells stretch with width: 100% and 1%; in split the colgroup sets widths instead. */
+table.d.split td.cd { width: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+table.d.split td.no { width: auto; min-width: 0; }
+/* Hunk headers can be long (a whole function signature): cut, the full text is in the tooltip. */
+table.d.split tr.hunk td { overflow: hidden; text-overflow: ellipsis; }
 table.d tr.add td { background: var(--add-bg); }
 table.d tr.add td.no { background: var(--add-num); }
 table.d tr.del td { background: var(--del-bg); }
@@ -441,8 +445,8 @@ pre.cmds .pending { color: var(--faint); }
 .pick-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 /* fetch button with its menu */
-.split { position: relative; display: inline-flex; align-items: center; }
-.split .caret { padding: 6px 6px; margin-left: -6px; }
+.fetch-split { position: relative; display: inline-flex; align-items: center; }
+.fetch-split .caret { padding: 6px 6px; margin-left: -6px; }
 .menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 30; width: 280px; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow); padding: 6px; display: grid; gap: 1px; }
 .menu-h { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); font-weight: 600; padding: 6px 8px 4px; }
 .menu-item { display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px; font-size: 13.5px; }

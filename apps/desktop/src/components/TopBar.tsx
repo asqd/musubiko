@@ -83,7 +83,7 @@ export default function TopBar({
       </span>
       <span className="sp" data-tauri-drag-region />
       {info.remote && (
-        <div className="split" ref={menuRef}>
+        <div className="fetch-split" ref={menuRef}>
           <button
             className="btn ghost"
             onClick={onFetch}

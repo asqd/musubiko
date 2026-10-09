@@ -177,7 +177,7 @@ function Table({ file, lang, mode, source, opened, onExpand }: TableProps) {
     rows.push(
       <tr key={`h${hi}`} className="hunk">
         {split ? <td className="no" /> : <><td className="no" /><td className="no" /></>}
-        <td colSpan={split ? 3 : 2}>
+        <td colSpan={split ? 3 : 2} title={h.section || undefined}>
           @@ −{h.oldStart},{h.oldLines} +{h.newStart},{h.newLines} @@ {h.section}
         </td>
       </tr>,
