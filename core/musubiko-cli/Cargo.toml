@@ -1,0 +1,14 @@
+[package]
+name = "musubiko-cli"
+description = "Command-line check of what Musubiko sees in a repository"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "musubiko"
+path = "src/main.rs"
+
+[dependencies]
+musubiko-core.workspace = true
+serde_json.workspace = true
