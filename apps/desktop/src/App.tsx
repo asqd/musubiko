@@ -8,7 +8,8 @@ import DiffView from "./diff/DiffView";
 import HotfixDialog from "./components/HotfixDialog";
 import Journal from "./components/Journal";
 import Radar, { needsAttention } from "./components/Radar";
-import { BranchIcon, FlameIcon, LogIcon } from "./components/Icons";
+import Locate from "./components/Locate";
+import { BranchIcon, FlameIcon, LogIcon, SearchIcon } from "./components/Icons";
 
 export default function App() {
   const [info, setInfo] = useState<RepoInfo | null>(null);
@@ -20,7 +21,8 @@ export default function App() {
   const lastRefresh = useRef(0);
   const [diffOf, setDiffOf] = useState<{ branch: Branch; base: string } | null>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const [view, setView] = useState<"branches" | "hotfixes" | "journal">("branches");
+  const [view, setView] = useState<"branches" | "hotfixes" | "find" | "journal">("branches");
+  const [findRequest, setFindRequest] = useState<{ query: string; n: number } | null>(null);
   const [radar, setRadar] = useState<RadarData | null>(null);
   const [radarError, setRadarError] = useState<string | null>(null);
   const [radarLoading, setRadarLoading] = useState(false);
@@ -134,6 +136,12 @@ export default function App() {
     }
   };
 
+  const findCommit = (query: string) => {
+    setFindRequest({ query, n: Date.now() });
+    setView("find");
+    setDiffOf(null);
+  };
+
   const openDiff = (branch: Branch, base: string) => {
     listScroll.current = mainRef.current?.scrollTop ?? 0;
     setDiffOf({ branch, base });
@@ -197,6 +205,16 @@ export default function App() {
           )}
         </button>
         <button
+          className={`nav ${view === "find" ? "on" : ""}`}
+          onClick={() => {
+            setView("find");
+            setDiffOf(null);
+          }}
+        >
+          <SearchIcon />
+          Где коммит?
+        </button>
+        <button
           className={`nav ${view === "journal" ? "on" : ""}`}
           onClick={() => {
             setView("journal");
@@ -236,8 +254,12 @@ export default function App() {
             loading={radarLoading}
             onHotfix={() => setHotfixOpen(true)}
             onDiff={(b) => openDiff(b, b.target)}
+            onFind={findCommit}
             onChanged={refresh}
           />
+        </div>
+        <div hidden={!!diffOf || view !== "find"}>
+          <Locate info={info} request={findRequest} radar={radar} active={view === "find" && !diffOf} onChanged={refresh} />
         </div>
         {diffOf && (
           <DiffView key={diffOf.branch.name} info={info} branch={diffOf.branch} base={diffOf.base} tick={tick} onBack={closeDiff} />

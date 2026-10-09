@@ -390,3 +390,23 @@ pre.cmds .pending { color: var(--faint); }
 .bulk { position: sticky; bottom: 12px; margin-top: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow); z-index: 3; }
 .clist-plain.dl li { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center; }
 .fetch-chip { font-size: 12px; }
+
+/* where is the commit */
+.findbox { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.search.big { flex: 1; max-width: 560px; padding: 7px 10px; }
+.search.big input { width: 100%; font-family: var(--mono); }
+.stale-data { opacity: .6; }
+.fc { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; margin-bottom: 12px; overflow: clip; }
+.fc .top1 { display: flex; gap: 12px; align-items: baseline; padding: 10px 16px; flex-wrap: wrap; }
+.fc .top1 .m { font-weight: 600; user-select: text; min-width: 0; overflow-wrap: anywhere; }
+.where { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); border-top: 1px solid var(--line); }
+.where > div { padding: 8px 16px; border-right: 1px solid var(--line); min-width: 0; }
+.where > div:last-child { border-right: 0; }
+.where .k { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--faint); font-weight: 600; margin-bottom: 3px; }
+.where .v { font: 12.5px var(--mono); user-select: text; }
+.v.ok { color: var(--ok); }
+.v.no { color: var(--bad); }
+.verdict { padding: 8px 16px; border-top: 1px solid var(--line); font-size: 13px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.verdict.bad { background: var(--bad-weak); color: var(--bad); }
+.verdict.warn { background: var(--warn-weak); color: var(--warn); }
+.verdict.ok { background: var(--ok-weak); color: var(--ok); }

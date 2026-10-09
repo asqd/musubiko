@@ -10,8 +10,8 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use musubiko_core::{
-    Branch, BranchDiff, ConflictFile, DeleteInput, FileDiff, Git, HotfixInput, HotfixPlan, OpPlan,
-    OpStatus, Operation, PortInput, Radar, Repo, RepoInfo,
+    Branch, BranchDiff, CommitSearch, ConflictFile, DeleteInput, FileDiff, Git, HotfixInput,
+    HotfixPlan, OpPlan, OpStatus, Operation, PortInput, Radar, Repo, RepoInfo,
 };
 use tauri::{AppHandle, State};
 
@@ -180,6 +180,12 @@ async fn start_port(
 }
 
 #[tauri::command]
+async fn locate(query: String, state: State<'_, AppState>) -> Result<CommitSearch, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.locate(&query)).await
+}
+
+#[tauri::command]
 async fn start_fetch(app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
     start_op(&app, &state, |repo| repo.start_fetch()).await
 }
@@ -308,6 +314,7 @@ fn main() {
             plan_delete,
             start_delete,
             start_fetch,
+            locate,
             op_step,
             op_rollback,
             op_leave,

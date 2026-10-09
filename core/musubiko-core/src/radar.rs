@@ -19,7 +19,7 @@ const RECENT_DAYS: i64 = 120;
 /// How far back to look for commits that are in master and not in develop.
 const LOST_DAYS: u32 = 120;
 /// develop this much older than master means the repository does not use develop.
-const STALE_DEVELOP_DAYS: i64 = 90;
+pub(crate) const STALE_DEVELOP_DAYS: i64 = 90;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -377,7 +377,11 @@ impl Repo {
     /// The revision range of commits a branch adds to `base`, also after it was merged:
     /// before the merge it is `base..branch`; after a merge commit it is `M^1..branch`;
     /// after a fast-forward the branch's reflog tells where it was created.
-    fn own_range(&self, b: &Branch, base: &str) -> Result<(Option<String>, Option<String>)> {
+    pub(crate) fn own_range(
+        &self,
+        b: &Branch,
+        base: &str,
+    ) -> Result<(Option<String>, Option<String>)> {
         let r = self.ref_of(b);
         if b.ahead > 0 {
             return Ok((Some(format!("{base}..{r}")), None));
@@ -462,13 +466,13 @@ impl Repo {
 
 /// Answers "are this commit's changes already in that tree?" by reverse-applying the commit's
 /// patch to the tree in a scratch index. The repository's own index is never touched.
-struct ContentProbe<'a> {
+pub(crate) struct ContentProbe<'a> {
     repo: &'a Repo,
     index: std::path::PathBuf,
 }
 
 impl<'a> ContentProbe<'a> {
-    fn new(repo: &'a Repo, target: &str) -> Result<ContentProbe<'a>> {
+    pub(crate) fn new(repo: &'a Repo, target: &str) -> Result<ContentProbe<'a>> {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
         let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let index =
@@ -489,7 +493,7 @@ impl<'a> ContentProbe<'a> {
         Ok(probe)
     }
 
-    fn has(&self, commit: &str) -> Result<bool> {
+    pub(crate) fn has(&self, commit: &str) -> Result<bool> {
         let r = self.repo;
         let patch = r.git.output(
             &r.root,

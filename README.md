@@ -38,6 +38,10 @@ Rust, приложение — на Tauri (веб-интерфейс внутр�
   все») и удалить локально и на сервере одним атомарным push. Чужие и не слитые ветки
   требуют подтверждения, текущую и базовые удалить нельзя. «Получить» делает
   `git fetch --prune`, чтобы статусы и список были свежими.
+- «Где коммит?»: по хэшу, номеру задачи или тексту находит коммиты (номер задачи ищется и в
+  названиях веток, в том числе уже влитых) и показывает, есть ли каждый в master и develop —
+  сам, как cherry-pick или по содержимому после squash, — с какого тега он в master, в каких
+  ветках лежит и куда его перенесли. Если коммит есть только в master, его можно перенести.
 - Журнал: всё, что приложение делало с репозиторием, с командами и отменой.
 
 ## Как устроены операции
@@ -103,4 +107,5 @@ cargo run -p musubiko-cli -- conflicts feature/x ~/work/project   # где сл�
 cargo run -p musubiko-cli -- hotfix "LT-1 fix" ~/work/project --after worktree        # план
 cargo run -p musubiko-cli -- hotfix "LT-1 fix" ~/work/project --after worktree --run  # выполнить
 cargo run -p musubiko-cli -- radar ~/work/project                     # радар хотфиксов
+cargo run -p musubiko-cli -- where LT-4888 ~/work/project             # где коммит
 ```

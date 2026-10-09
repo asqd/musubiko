@@ -4,6 +4,7 @@
 //! `musubiko conflicts BRANCH [PATH]` prints where merging into the base would conflict.
 //! `musubiko hotfix NAME [PATH] [--after worktree|switch|stay] [--no-push] [--run]` plans a hotfix
 //! pair and, with `--run`, creates it.
+//! `musubiko where QUERY [PATH]` finds commits and tells where each one is.
 //! `musubiko radar [PATH]` shows which hotfix commits are not on the develop side.
 //! `--json` prints exactly what the app receives.
 
@@ -48,7 +49,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     _ => After::Stay,
                 }
             }
-            _ if matches!(cmd.as_str(), "diff" | "conflicts" | "hotfix") && branch.is_none() => {
+            _ if matches!(cmd.as_str(), "diff" | "conflicts" | "hotfix" | "where")
+                && branch.is_none() =>
+            {
                 branch = Some(a)
             }
             _ => path = PathBuf::from(a),
@@ -289,9 +292,46 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 started.elapsed()
             );
         }
+        "where" => {
+            let started = Instant::now();
+            let s =
+                repo.locate(&branch.ok_or("укажите, что искать: musubiko where QUERY [PATH]")?)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&s)?);
+                return Ok(());
+            }
+            for r in &s.results {
+                println!("{} {}  — {:?}", r.commit.short, r.commit.subject, r.verdict);
+                let tag = r
+                    .first_tag
+                    .as_deref()
+                    .map(|t| format!(" с {t}"))
+                    .unwrap_or_default();
+                println!("    {}: {:?}{tag}", s.master, r.master);
+                if let (Some(d), Some(p)) = (&s.develop, &r.develop) {
+                    println!("    {d}: {p:?}");
+                }
+                if !r.branches.is_empty() {
+                    println!("    ветки: {}", r.branches.join(", "));
+                }
+                for c in &r.cherry_picks {
+                    println!("    cherry-pick: {} {}", c.short, c.subject);
+                }
+            }
+            let more = if s.truncated {
+                " (показаны не все)"
+            } else {
+                ""
+            };
+            eprintln!(
+                "{} коммитов{more} за {:.1?}",
+                s.results.len(),
+                started.elapsed()
+            );
+        }
         other => {
             return Err(format!(
-                "неизвестная команда {other}; есть branches, diff, conflicts, hotfix, radar и info"
+                "неизвестная команда {other}; есть branches, diff, conflicts, hotfix, radar, where и info"
             )
             .into());
         }

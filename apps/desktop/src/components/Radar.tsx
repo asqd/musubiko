@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Branch, Commit, HotfixPair, PairState, Radar as RadarData, RepoInfo } from "../api";
-import { ago, copyText, fullDate, plural } from "../format";
+import { ago, fullDate, plural } from "../format";
 import { StatusPill } from "./Branches";
 import { DeleteDialog, PortDialog } from "./OpDialogs";
 import { FlameIcon } from "./Icons";
@@ -31,10 +31,12 @@ interface Props {
   loading: boolean;
   onHotfix: () => void;
   onDiff: (b: Branch) => void;
+  /** Open "Где коммит?" for a hash. */
+  onFind: (hash: string) => void;
   onChanged: () => void;
 }
 
-export default function Radar({ info, radar, error, loading, onHotfix, onDiff, onChanged }: Props) {
+export default function Radar({ info, radar, error, loading, onHotfix, onDiff, onFind, onChanged }: Props) {
   const [dialog, setDialog] = useState<Dialog>(null);
   const [showDone, setShowDone] = useState(false);
   const { hotfixPrefix, devSuffix } = info.flow;
@@ -91,7 +93,7 @@ export default function Radar({ info, radar, error, loading, onHotfix, onDiff, o
           </div>
           {radar.lost.map((c) => (
             <div key={c.hash} className="srow">
-              <button className="hash" onClick={() => copyText(c.hash)} title="Скопировать хэш">
+              <button className="hash" onClick={() => onFind(c.hash)} title="Где этот коммит?">
                 {c.short}
               </button>
               <span className="m" title={c.subject}>
@@ -123,11 +125,11 @@ export default function Radar({ info, radar, error, loading, onHotfix, onDiff, o
         <>
           {groups.attention.length > 0 && <h2 className="group-h">Требуют внимания</h2>}
           {groups.attention.map((p) => (
-            <PairCard key={p.slug} pair={p} info={info} onDiff={onDiff} onDialog={setDialog} />
+            <PairCard key={p.slug} pair={p} info={info} onDiff={onDiff} onFind={onFind} onDialog={setDialog} />
           ))}
           {groups.active.length > 0 && <h2 className="group-h">В работе</h2>}
           {groups.active.map((p) => (
-            <PairCard key={p.slug} pair={p} info={info} onDiff={onDiff} onDialog={setDialog} />
+            <PairCard key={p.slug} pair={p} info={info} onDiff={onDiff} onFind={onFind} onDialog={setDialog} />
           ))}
           {groups.done.length > 0 && (
             <button className="group-h toggle-h" onClick={() => setShowDone((v) => !v)}>
@@ -135,7 +137,9 @@ export default function Radar({ info, radar, error, loading, onHotfix, onDiff, o
             </button>
           )}
           {showDone &&
-            groups.done.map((p) => <PairCard key={p.slug} pair={p} info={info} onDiff={onDiff} onDialog={setDialog} />)}
+            groups.done.map((p) => (
+              <PairCard key={p.slug} pair={p} info={info} onDiff={onDiff} onFind={onFind} onDialog={setDialog} />
+            ))}
           {radar && radar.olderHidden > 0 && radar.pairs.length > 0 && (
             <div className="faint small">
               Ещё {radar.olderHidden} {plural(radar.olderHidden, "пара старше", "пары старше", "пар старше")} {radar.recentDays} дней не
@@ -200,11 +204,13 @@ function PairCard({
   pair: p,
   info,
   onDiff,
+  onFind,
   onDialog,
 }: {
   pair: HotfixPair;
   info: RepoInfo;
   onDiff: (b: Branch) => void;
+  onFind: (hash: string) => void;
   onDialog: (d: Dialog) => void;
 }) {
   const [label, cls] = STATE[p.state];
@@ -231,7 +237,7 @@ function PairCard({
           <h4>Коммиты master-части → develop-сторона</h4>
           {p.commits.map(({ commit: c, ported }) => (
             <div key={c.hash} className="srow">
-              <button className="hash" onClick={() => copyText(c.hash)} title="Скопировать хэш">
+              <button className="hash" onClick={() => onFind(c.hash)} title="Где этот коммит?">
                 {c.short}
               </button>
               <span className="m" title={c.subject}>

@@ -229,6 +229,34 @@ export interface Radar {
   develop: string;
 }
 
+export type Presence =
+  | { kind: "itself" }
+  | { kind: "copy"; hash: string; short: string }
+  | { kind: "content" }
+  | { kind: "missing" };
+
+export type Verdict = "everywhere" | "masterOnly" | "developOnly" | "branchesOnly" | "nowhere";
+
+export interface CommitPlace {
+  commit: Commit;
+  isMerge: boolean;
+  master: Presence;
+  develop: Presence | null;
+  firstTag: string | null;
+  branches: string[];
+  cherryPicks: Commit[];
+  verdict: Verdict;
+}
+
+export interface CommitSearch {
+  query: string;
+  results: CommitPlace[];
+  truncated: boolean;
+  master: string;
+  develop: string | null;
+  developStaleDays: number | null;
+}
+
 /** The command line a step runs, as shown to the user. */
 export function commandOf(step: Step): string {
   return ["git", ...step.args.map((a) => (/^[\w\-./:=@^~+,%]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`))].join(" ");
@@ -251,6 +279,7 @@ export const api = {
   planDelete: (input: DeleteInput) => invoke<OpPlan>("plan_delete", { input }),
   startDelete: (input: DeleteInput) => invoke<Operation>("start_delete", { input }),
   startFetch: () => invoke<Operation>("start_fetch"),
+  locate: (query: string) => invoke<CommitSearch>("locate", { query }),
   opStep: () => invoke<Operation>("op_step"),
   opRollback: () => invoke<Operation>("op_rollback"),
   opLeave: () => invoke<Operation>("op_leave"),
