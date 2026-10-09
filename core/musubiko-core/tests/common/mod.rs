@@ -27,6 +27,9 @@ impl Fixture {
         f.git(&["config", "user.email", "me@example.com"]);
         // The app's own git calls (stash makes a commit) read the repository config.
         f.git(&["config", "user.name", "Me"]);
+        // Git for Windows turns on autocrlf in its system config, which the app's calls read and
+        // the fixture's don't; the repository's own setting wins over both.
+        f.git(&["config", "core.autocrlf", "false"]);
         f
     }
 
