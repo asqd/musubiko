@@ -236,6 +236,17 @@ fn system() -> String {
             .ok()
             .map(|o| format!("macOS {}", String::from_utf8_lossy(&o.stdout).trim()))
             .unwrap_or_else(|| "macOS".into())
+    } else if cfg!(target_os = "linux") {
+        std::fs::read_to_string("/etc/os-release")
+            .ok()
+            .and_then(|t| {
+                t.lines()
+                    .find_map(|l| l.strip_prefix("PRETTY_NAME="))
+                    .map(|v| v.trim_matches('"').to_string())
+            })
+            .unwrap_or_else(|| "Linux".into())
+    } else if cfg!(windows) {
+        "Windows".into()
     } else {
         std::env::consts::OS.to_string()
     };
@@ -261,10 +272,18 @@ fn clip(s: &str, max: usize) -> String {
 /// Masks the home folder and credentials in URLs (`https://user:token@host` → `https://***@host`).
 fn mask(s: &str) -> String {
     let mut s = s.to_string();
-    if let Some(home) = std::env::var_os("HOME").map(PathBuf::from) {
-        let home = home.to_string_lossy().trim_end_matches('/').to_string();
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" });
+    if let Some(home) = home.map(PathBuf::from) {
+        let home = home
+            .to_string_lossy()
+            .trim_end_matches(['/', '\\'])
+            .to_string();
         if home.len() > 1 {
             s = s.replace(&home, "~");
+            // git prints Windows paths with forward slashes.
+            if home.contains('\\') {
+                s = s.replace(&home.replace('\\', "/"), "~");
+            }
         }
     }
     mask_credentials(&s)

@@ -1,4 +1,5 @@
 import { ConflictFile } from "../api";
+import { key } from "../platform";
 
 interface Props {
   files: ConflictFile[] | null;
@@ -22,7 +23,7 @@ export default function Conflicts({ files, branch, target }: Props) {
       <div className="tablewrap">
         <div className="empty">
           <h3>Конфликтов нет</h3>
-          Похоже, {target} изменился и ветка теперь сливается чисто. Обновите список веток (⌘R).
+          Похоже, {target} изменился и ветка теперь сливается чисто. Обновите список веток ({key("R")}).
         </div>
       </div>
     );

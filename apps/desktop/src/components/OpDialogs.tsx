@@ -6,6 +6,7 @@ import { StatusPill } from "./Branches";
 import { copyText, plural } from "../format";
 import { Dialog, OpDone, PlanView, RunFooter, StepsView, useOpRunner } from "./OpRun";
 import { ErrorBanner } from "./ErrorBanner";
+import { home, inFileManager } from "../platform";
 
 interface PortProps {
   info: RepoInfo;
@@ -223,7 +224,6 @@ export function DeleteDialog({ info, names, branches, onClose, onChanged }: Dele
   );
 }
 
-const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 
 /** A cherry-pick stopped on a conflict: resolve it in the scratch folder and carry on. */
 function ConflictPanel({ runner, target }: { runner: ReturnType<typeof useOpRunner>; target: string }) {
@@ -278,7 +278,7 @@ function ConflictPanel({ runner, target }: { runner: ReturnType<typeof useOpRunn
           {home(state.dir)}
         </span>
         <button className="btn sm" onClick={() => revealItemInDir(state.dir).catch(() => undefined)}>
-          Показать в Finder
+          Показать {inFileManager}
         </button>
         <button className="btn sm" onClick={async () => setCopied(await copyText(state.dir))}>
           {copied ? "Скопировано" : "Скопировать путь"}

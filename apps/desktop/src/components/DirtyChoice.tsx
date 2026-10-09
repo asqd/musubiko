@@ -2,6 +2,7 @@
 // Shared by the hotfix and checkout dialogs so both ask the same way.
 import { RepoInfo } from "../api";
 import { plural } from "../format";
+import { home } from "../platform";
 
 export type WorkMode = "worktree" | "switch";
 
@@ -16,7 +17,6 @@ interface Props {
   subject: string;
 }
 
-const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 
 export default function DirtyChoice({ info, mode, onMode, target, worktreePath, subject }: Props) {
   const dirty = info.changes.length;

@@ -4,6 +4,7 @@ import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, commandOf, errorText, Operation, OpPlan } from "../api";
 import { copyText } from "../format";
 import { CopyReport, ErrorBanner } from "./ErrorBanner";
+import { home, inFileManager } from "../platform";
 
 /** Drives the current operation: runs steps until it finishes or stops, then reports a change. */
 export function useOpRunner(onChanged: () => void) {
@@ -219,10 +220,10 @@ export function OpDone({ op }: { op: Operation }) {
       {wt ? (
         <div className="wt">
           <span>
-            Папка <span className="mono">{wt.replace(/^\/Users\/[^/]+/, "~")}</span>
+            Папка <span className="mono">{home(wt)}</span>
           </span>
           <button className="btn sm" onClick={() => revealItemInDir(wt).catch(() => undefined)}>
-            Показать в Finder
+            Показать {inFileManager}
           </button>
           <button className="btn sm" onClick={async () => setCopied(await copyText(wt))}>
             {copied ? "Скопировано" : "Скопировать путь"}

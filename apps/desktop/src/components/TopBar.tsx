@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { RepoInfo, Settings } from "../api";
 import { ago, fullDate, plural } from "../format";
 import { BranchIcon, DownloadIcon, FlameIcon, Logo, RefreshIcon, SearchIcon } from "./Icons";
+import { key } from "../platform";
 
 interface Props {
   info: RepoInfo;
@@ -64,7 +65,7 @@ export default function TopBar({
   };
 
   return (
-    // The window has no title bar: this bar drags it and leaves room for the traffic lights.
+    // On a Mac the window has no title bar: this bar drags it and leaves room for the traffic lights.
     <header className="top" data-tauri-drag-region>
       <div className="logo" data-tauri-drag-region>
         <Logo />
@@ -149,13 +150,13 @@ export default function TopBar({
           )}
         </div>
       )}
-      <button className="btn ghost" onClick={refresh} disabled={busy} title="Перечитать репозиторий (⌘R)">
+      <button className="btn ghost" onClick={refresh} disabled={busy} title={`Перечитать репозиторий (${key("R")})`}>
         {busy ? <span className="spin" /> : <RefreshIcon />}
         Обновить
       </button>
       <button className="btn ghost" onClick={onPalette} title="Палитра команд">
         <SearchIcon />
-        <kbd>⌘K</kbd>
+        <kbd>{key("K")}</kbd>
       </button>
       <button className="btn hot" onClick={onHotfix} title="hotfix/… от master и hotfix/…-dev от develop">
         <FlameIcon />

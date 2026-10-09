@@ -120,8 +120,24 @@ make run      # Release-сборка Musubiko.app и запуск
 make icon     # перерисовать иконку из design/make-icon.swift
 ```
 
-Готовое приложение: `target/release/bundle/macos/Musubiko.app`. Оно не подписано: при первом
-запуске откройте его через контекстное меню Finder → «Открыть».
+Готовое приложение: `target/release/bundle/macos/Musubiko.app`.
+
+### Установщики для macOS, Windows и Linux
+
+Их собирает GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)):
+
+- на каждый push — тесты ядра на Windows и Linux (на macOS они идут локально);
+- по кнопке Actions → Build → Run workflow — установщики, они появляются в артефактах запуска;
+- на тег `v*` (`git tag v0.2.0 && git push --tags`) — то же плюс черновик релиза с установщиками.
+
+| Система | Файл | Первый запуск |
+|---|---|---|
+| macOS (Apple Silicon и Intel) | `Musubiko_<версия>_universal.dmg` | Приложение подписано ad-hoc, без Apple Developer ID. macOS 15: открыть, закрыть предупреждение, затем «Системные настройки → Конфиденциальность и безопасность → Всё равно открыть». macOS 12–14: правый клик → «Открыть». Или `xattr -dr com.apple.quarantine /Applications/Musubiko.app` |
+| Windows 10/11 | `Musubiko_<версия>_x64-setup.exe` | SmartScreen: «Подробнее → Выполнить в любом случае». Ставится для текущего пользователя, без прав администратора |
+| Linux | `.AppImage` или `.deb` | AppImage: `chmod +x` и запустить. Нужен WebKitGTK 4.1 (Ubuntu 22.04+, Debian 12+) |
+
+Везде нужен git 2.38 или новее. Musubiko ищет его в `PATH` и в обычных местах установки
+(Homebrew, Git for Windows); другой можно указать в переменной `MUSUBIKO_GIT`.
 
 Утилита командной строки:
 

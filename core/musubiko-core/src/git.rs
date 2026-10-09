@@ -8,6 +8,15 @@ use crate::{Error, Result};
 /// `git merge-tree --write-tree` appeared in 2.38; merge status depends on it.
 pub const MIN_VERSION: (u32, u32, u32) = (2, 38, 0);
 
+/// How to get a newer git, for the "git not found" message.
+pub(crate) const INSTALL_HINT: &str = if cfg!(windows) {
+    "https://git-scm.com/download/win"
+} else if cfg!(target_os = "macos") {
+    "brew install git"
+} else {
+    "через пакетный менеджер дистрибутива"
+};
+
 /// A finished git command, as handed to the hook set with [`set_command_hook`].
 pub struct Finished<'a> {
     pub dir: &'a Path,
@@ -84,7 +93,7 @@ impl Git {
     }
 
     fn command(&self, dir: &Path, args: &[&str]) -> Command {
-        let mut cmd = Command::new(&self.bin);
+        let mut cmd = new_command(&self.bin);
         cmd.current_dir(dir)
             .args(args)
             .env("GIT_OPTIONAL_LOCKS", "0")
@@ -160,26 +169,54 @@ impl Git {
     }
 }
 
+/// A command for a console program. On Windows a GUI app would otherwise flash a console
+/// window for every git call.
+fn new_command(bin: &Path) -> Command {
+    #[allow(unused_mut)]
+    let mut cmd = Command::new(bin);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    cmd
+}
+
 fn candidates() -> Vec<PathBuf> {
+    let exe = if cfg!(windows) { "git.exe" } else { "git" };
     let mut list = Vec::new();
     if let Some(p) = std::env::var_os("MUSUBIKO_GIT") {
         list.push(PathBuf::from(p));
     }
     if let Some(path) = std::env::var_os("PATH") {
-        list.extend(std::env::split_paths(&path).map(|d| d.join("git")));
+        list.extend(std::env::split_paths(&path).map(|d| d.join(exe)));
     }
-    for p in [
-        "/opt/homebrew/bin/git",
-        "/usr/local/bin/git",
-        "/usr/bin/git",
-    ] {
-        list.push(PathBuf::from(p));
+    if cfg!(windows) {
+        // Git for Windows, installed for everyone or for the current user.
+        for (var, dir) in [
+            ("ProgramFiles", r"Git\cmd"),
+            ("ProgramW6432", r"Git\cmd"),
+            ("LOCALAPPDATA", r"Programs\Git\cmd"),
+        ] {
+            if let Some(base) = std::env::var_os(var) {
+                list.push(PathBuf::from(base).join(dir).join(exe));
+            }
+        }
+    } else {
+        for p in [
+            "/opt/homebrew/bin/git",
+            "/usr/local/bin/git",
+            "/usr/bin/git",
+        ] {
+            list.push(PathBuf::from(p));
+        }
     }
     list.into_iter().filter(|p| p.is_file()).collect()
 }
 
 fn version_of(bin: &Path) -> Option<(u32, u32, u32)> {
-    let out = Command::new(bin)
+    let out = new_command(bin)
         .arg("--version")
         .env("LC_ALL", "C")
         .output()

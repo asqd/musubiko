@@ -14,6 +14,7 @@ import CheckoutDialog from "./components/CheckoutDialog";
 import Palette, { Command } from "./palette/Palette";
 import { BranchIcon, FlameIcon, LogIcon, SearchIcon } from "./components/Icons";
 import { ErrorBanner } from "./components/ErrorBanner";
+import { baseName, home, inFileManager, key } from "./platform";
 
 export default function App() {
   const [info, setInfo] = useState<RepoInfo | null>(null);
@@ -225,7 +226,6 @@ export default function App() {
     setView(v);
     setDiffOf(null);
   };
-  const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
   const PAIR_HINT: Record<string, string> = {
     lost: "в master, но не в develop",
     noDev: "нет -dev ветки",
@@ -242,7 +242,7 @@ export default function App() {
         ...(info.remote
           ? [{ id: "act:fetch", group: "Действия", label: "Получить с сервера", hint: "git fetch --prune", run: () => void fetchNow() }]
           : []),
-        { id: "act:refresh", group: "Действия", label: "Обновить", hint: <kbd>⌘R</kbd>, run: () => void refresh() },
+        { id: "act:refresh", group: "Действия", label: "Обновить", hint: <kbd>{key("R")}</kbd>, run: () => void refresh() },
         ...(info.remote
           ? [
               settings.backgroundFetch
@@ -266,7 +266,7 @@ export default function App() {
           id: "act:compact",
           group: "Действия",
           label: compact ? "Развернуть левую панель" : "Свернуть левую панель до иконок",
-          hint: <kbd>⌘B</kbd>,
+          hint: <kbd>{key("B")}</kbd>,
           run: toggleCompact,
         },
         {
@@ -276,7 +276,7 @@ export default function App() {
           hint: "сбросить кэш",
           run: () => void api.clearStatusCache().then(refresh),
         },
-        { id: "act:open", group: "Действия", label: "Открыть репозиторий…", hint: <kbd>⌘O</kbd>, run: () => void pickFolder() },
+        { id: "act:open", group: "Действия", label: "Открыть репозиторий…", hint: <kbd>{key("O")}</kbd>, run: () => void pickFolder() },
         {
           id: "act:report",
           group: "Действия",
@@ -287,7 +287,7 @@ export default function App() {
         {
           id: "act:log",
           group: "Действия",
-          label: "Показать лог в Finder",
+          label: `Показать лог ${inFileManager}`,
           run: () => void api.logPath().then((p) => (p ? revealItemInDir(p) : undefined)).catch(() => undefined),
         },
         { id: "view:branches", group: "Разделы", label: "Ветки", run: () => go("branches") },
@@ -310,7 +310,7 @@ export default function App() {
         })),
         ...recent
           .filter((p) => p !== info.root)
-          .map((p) => ({ id: "repo:" + p, group: "Репозитории", label: p.split("/").pop() ?? p, hint: home(p), run: () => void openPath(p) })),
+          .map((p) => ({ id: "repo:" + p, group: "Репозитории", label: baseName(p), hint: home(p), run: () => void openPath(p) })),
         ...branchList.flatMap((b) => [
           { id: "diff:" + b.name, group: "Ветки", kind: "Дифф", label: b.name, mono: true, run: () => openDiff(b, b.target) },
           ...(b.isHead
@@ -392,7 +392,7 @@ export default function App() {
           {!compact && (
             <>
               <div className="faint" title={info.root}>
-                {info.root.replace(/^\/Users\/[^/]+/, "~")}
+                {home(info.root)}
               </div>
               <div className="faint">git {info.git.split(" ")[0]}</div>
             </>
@@ -400,9 +400,9 @@ export default function App() {
           <button
             className="nav collapse"
             onClick={toggleCompact}
-            data-tip={compact ? "Развернуть панель (⌘B)" : undefined}
+            data-tip={compact ? `Развернуть панель (${key("B")})` : undefined}
             aria-label={compact ? "Развернуть панель" : "Свернуть панель"}
-            title={compact ? undefined : "Оставить одни иконки (⌘B)"}
+            title={compact ? undefined : `Оставить одни иконки (${key("B")})`}
           >
             <span className="nav-ic">
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">

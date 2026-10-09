@@ -5,7 +5,7 @@ pub type Result<T> = std::result::Result<T, Error>;
 /// Errors are worded for the person using the app, in Russian, like the rest of the UI.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Не найден git версии {min} или новее. Найдены: {found}. Установите свежий git: brew install git", min = crate::git::fmt_version(crate::MIN_VERSION), found = if found.is_empty() { "ничего".to_string() } else { found.join(", ") })]
+    #[error("Не найден git версии {min} или новее. Найдены: {found}. Установите свежий git: {hint}", hint = crate::git::INSTALL_HINT, min = crate::git::fmt_version(crate::MIN_VERSION), found = if found.is_empty() { "ничего".to_string() } else { found.join(", ") })]
     GitNotFound { found: Vec<String> },
 
     /// A check before or after a step said no; the message says why.

@@ -1,5 +1,6 @@
 import { CloseIcon, FolderIcon, Logo } from "./Icons";
 import { ErrorBanner } from "./ErrorBanner";
+import { baseName, home, key } from "../platform";
 
 interface Props {
   recent: string[];
@@ -10,7 +11,6 @@ interface Props {
   onForget: (path: string) => void;
 }
 
-const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
 
 export default function Welcome({ recent, error, opening, onPick, onOpen, onForget }: Props) {
   return (
@@ -27,7 +27,7 @@ export default function Welcome({ recent, error, opening, onPick, onOpen, onForg
         <button className="btn primary big" onClick={onPick} disabled={opening}>
           <FolderIcon />
           {opening ? "Открываю…" : "Открыть репозиторий…"}
-          <kbd>⌘O</kbd>
+          <kbd>{key("O")}</kbd>
         </button>
         {error && <ErrorBanner error={error} />}
         {recent.length > 0 && (
@@ -37,7 +37,7 @@ export default function Welcome({ recent, error, opening, onPick, onOpen, onForg
               {recent.map((p) => (
                 <li key={p}>
                   <button className="recent-item" onClick={() => onOpen(p)} disabled={opening}>
-                    <b>{p.split("/").pop()}</b>
+                    <b>{baseName(p)}</b>
                     <span className="faint mono">{home(p)}</span>
                   </button>
                   <button className="ib" title="Убрать из списка" aria-label="Убрать из списка" onClick={() => onForget(p)}>

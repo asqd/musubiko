@@ -108,7 +108,8 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border: 1px solid var(--line
 
 /* shell */
 .app { display: grid; grid-template-columns: 200px minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); height: 100%; }
-.top { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 84px; min-height: 46px; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; }
+.top { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; padding: 8px 14px; min-height: 46px; background: var(--panel); border-bottom: 1px solid var(--line); min-width: 0; }
+.mac .top { padding-left: 84px; }
 .logo { display: flex; }
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); white-space: nowrap; min-width: 0; }
 button.chip:hover { border-color: var(--line-strong); background: var(--sunken); }
