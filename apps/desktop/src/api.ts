@@ -308,6 +308,7 @@ export const api = {
   startDelete: (input: DeleteInput) => invoke<Operation>("start_delete", { input }),
   startFetch: () => invoke<Operation>("start_fetch"),
   locate: (query: string) => invoke<CommitSearch>("locate", { query }),
+  clearStatusCache: () => invoke<void>("clear_status_cache"),
   planCheckout: (input: CheckoutInput) => invoke<CheckoutPlan>("plan_checkout", { input }),
   startCheckout: (input: CheckoutInput) => invoke<Operation>("start_checkout", { input }),
   opStep: () => invoke<Operation>("op_step"),

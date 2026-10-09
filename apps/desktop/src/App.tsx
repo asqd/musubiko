@@ -185,6 +185,13 @@ export default function App() {
           ? [{ id: "act:fetch", group: "Действия", label: "Получить с сервера", hint: "git fetch --prune", run: () => void fetchNow() }]
           : []),
         { id: "act:refresh", group: "Действия", label: "Обновить", hint: <kbd>⌘R</kbd>, run: () => void refresh() },
+        {
+          id: "act:recompute",
+          group: "Действия",
+          label: "Пересчитать статусы веток с нуля",
+          hint: "сбросить кэш",
+          run: () => void api.clearStatusCache().then(refresh),
+        },
         { id: "act:open", group: "Действия", label: "Открыть репозиторий…", hint: <kbd>⌘O</kbd>, run: () => void pickFolder() },
         { id: "view:branches", group: "Разделы", label: "Ветки", run: () => go("branches") },
         {

@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::branches::Sync;
 use crate::{Error, Flow, Git, Result};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub struct Person {
     pub name: String,
     pub email: String,

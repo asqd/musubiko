@@ -4,6 +4,7 @@
 //! apply as they would in a terminal. Reads never take the index lock (`GIT_OPTIONAL_LOCKS=0`).
 
 mod branches;
+mod cache;
 mod checkout;
 mod diff;
 mod error;
@@ -18,6 +19,7 @@ mod radar;
 mod repo;
 
 pub use branches::{Branch, Location, Status, Sync};
+pub use cache::CacheStats;
 pub use checkout::{CheckoutInput, CheckoutMode, CheckoutPlan};
 pub use diff::{
     BranchDiff, ConflictFile, ConflictRegion, FileChange, FileDiff, Hunk, Line, LineKind,

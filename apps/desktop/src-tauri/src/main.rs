@@ -198,6 +198,15 @@ async fn start_checkout(
     start_op(&app, &state, move |repo| repo.start_checkout(&input)).await
 }
 
+/// Drops cached branch statuses; the next listing computes everything again.
+#[tauri::command]
+async fn clear_status_cache(state: State<'_, AppState>) -> Result<(), String> {
+    let repo = state.repo()?;
+    tauri::async_runtime::spawn_blocking(move || repo.clear_status_cache())
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 async fn locate(query: String, state: State<'_, AppState>) -> Result<CommitSearch, String> {
     let repo = state.repo()?;
@@ -378,6 +387,7 @@ fn main() {
             start_delete,
             start_fetch,
             locate,
+            clear_status_cache,
             plan_checkout,
             start_checkout,
             op_step,

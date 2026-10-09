@@ -91,7 +91,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 None => repo.default_base()?,
             };
             let started = Instant::now();
-            let list = repo.branches(&base)?;
+            let (list, stats) = repo.branches_with_stats(&base)?;
             if json {
                 println!("{}", serde_json::to_string_pretty(&list)?);
                 return Ok(());
@@ -124,7 +124,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     b.tip.subject,
                 );
             }
-            eprintln!("{} веток за {:.0?}", list.len(), started.elapsed());
+            eprintln!(
+                "{} веток за {:.0?} (из кэша {}, посчитано {})",
+                list.len(),
+                started.elapsed(),
+                stats.hits,
+                stats.computed
+            );
         }
         "diff" => {
             let branch = branch.ok_or("укажите ветку: musubiko diff BRANCH [PATH]")?;
