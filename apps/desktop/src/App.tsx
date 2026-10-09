@@ -10,6 +10,7 @@ import Journal from "./components/Journal";
 import Radar, { needsAttention } from "./components/Radar";
 import Locate from "./components/Locate";
 import CheckoutDialog from "./components/CheckoutDialog";
+import Palette, { Command } from "./palette/Palette";
 import { BranchIcon, FlameIcon, LogIcon, SearchIcon } from "./components/Icons";
 
 export default function App() {
@@ -30,6 +31,8 @@ export default function App() {
   const [hotfixOpen, setHotfixOpen] = useState(false);
   const [fetching, setFetching] = useState(false);
   const [checkoutOf, setCheckoutOf] = useState<Branch | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [branchList, setBranchList] = useState<Branch[]>([]);
   const listScroll = useRef(0);
 
   useEffect(() => {
@@ -75,6 +78,12 @@ export default function App() {
       if (Date.now() - lastRefresh.current > 15_000) void refresh();
     };
     const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        // Not over a dialog that is asking something.
+        if (!document.querySelector(".backdrop:not(.pal-back)")) setPaletteOpen((v) => !v);
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
         void refresh();
@@ -154,6 +163,61 @@ export default function App() {
     requestAnimationFrame(() => mainRef.current?.scrollTo(0, listScroll.current));
   }, []);
 
+  const go = (v: typeof view) => {
+    setView(v);
+    setDiffOf(null);
+  };
+  const home = (p: string) => p.replace(/^\/Users\/[^/]+/, "~");
+  const PAIR_HINT: Record<string, string> = {
+    lost: "в master, но не в develop",
+    noDev: "нет -dev ветки",
+    unsynced: "не всё перенесено",
+    work: "в работе",
+    released: "ждёт develop",
+    empty: "коммитов нет",
+    done: "завершён",
+  };
+  const commands: Command[] = !info
+    ? []
+    : [
+        { id: "act:hotfix", group: "Действия", label: "Новый hotfix", hint: "master + develop", run: () => setHotfixOpen(true) },
+        ...(info.remote
+          ? [{ id: "act:fetch", group: "Действия", label: "Получить с сервера", hint: "git fetch --prune", run: () => void fetchNow() }]
+          : []),
+        { id: "act:refresh", group: "Действия", label: "Обновить", hint: <kbd>⌘R</kbd>, run: () => void refresh() },
+        { id: "act:open", group: "Действия", label: "Открыть репозиторий…", hint: <kbd>⌘O</kbd>, run: () => void pickFolder() },
+        { id: "view:branches", group: "Разделы", label: "Ветки", run: () => go("branches") },
+        {
+          id: "view:hotfixes",
+          group: "Разделы",
+          label: "Хотфиксы",
+          hint: needsAttention(radar) ? `требуют внимания: ${needsAttention(radar)}` : undefined,
+          run: () => go("hotfixes"),
+        },
+        { id: "view:find", group: "Разделы", label: "Где коммит?", run: () => go("find") },
+        { id: "view:journal", group: "Разделы", label: "Журнал", run: () => go("journal") },
+        ...(radar?.pairs ?? []).map((p) => ({
+          id: "hotfix:" + p.slug,
+          group: "Хотфиксы",
+          label: p.slug,
+          mono: true,
+          hint: PAIR_HINT[p.state],
+          run: () => go("hotfixes"),
+        })),
+        ...recent
+          .filter((p) => p !== info.root)
+          .map((p) => ({ id: "repo:" + p, group: "Репозитории", label: p.split("/").pop() ?? p, hint: home(p), run: () => void openPath(p) })),
+        ...branchList.flatMap((b) => [
+          { id: "diff:" + b.name, group: "Ветки", kind: "Дифф", label: b.name, mono: true, run: () => openDiff(b, b.target) },
+          ...(b.isHead
+            ? []
+            : [{ id: "co:" + b.name, group: "Ветки", kind: "Checkout", label: b.name, mono: true, run: () => setCheckoutOf(b) }]),
+        ]),
+      ];
+  const dynamicCommands = (q: string): Command[] => [
+    { id: "dyn:find", group: "Поиск", label: `Где коммит «${q.trim()}»?`, run: () => findCommit(q.trim()) },
+  ];
+
   if (!info) {
     return (
       <Welcome
@@ -175,9 +239,11 @@ export default function App() {
         onHotfix={() => setHotfixOpen(true)}
         onFetch={fetchNow}
         fetching={fetching}
+        onPalette={() => setPaletteOpen(true)}
         onSwitch={() => {
           setInfo(null);
           setDiffOf(null);
+          setBranchList([]);
         }}
       />
       <nav className="side" aria-label="Разделы">
@@ -243,10 +309,11 @@ export default function App() {
           <Branches
             info={info}
             tick={tick}
-            active={!diffOf && view === "branches" && !hotfixOpen && !checkoutOf}
+            active={!diffOf && view === "branches" && !hotfixOpen && !checkoutOf && !paletteOpen}
             onOpen={openDiff}
             onChanged={refresh}
             onCheckout={setCheckoutOf}
+            onList={setBranchList}
           />
         </div>
         <div hidden={!!diffOf || view !== "hotfixes"}>
@@ -269,6 +336,7 @@ export default function App() {
         )}
         {view === "journal" && !diffOf && <Journal tick={tick} onChanged={refresh} />}
       </main>
+      {paletteOpen && <Palette commands={commands} dynamic={dynamicCommands} onClose={() => setPaletteOpen(false)} />}
       {checkoutOf && (
         <CheckoutDialog info={info} branch={checkoutOf} onClose={() => setCheckoutOf(null)} onChanged={refresh} />
       )}

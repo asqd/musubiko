@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { RepoInfo } from "../api";
 import { ago, fullDate, plural } from "../format";
-import { BranchIcon, DownloadIcon, FlameIcon, Logo, RefreshIcon } from "./Icons";
+import { BranchIcon, DownloadIcon, FlameIcon, Logo, RefreshIcon, SearchIcon } from "./Icons";
 
 interface Props {
   info: RepoInfo;
@@ -9,6 +9,7 @@ interface Props {
   onHotfix: () => void;
   onFetch: () => void;
   fetching: boolean;
+  onPalette: () => void;
   onSwitch: () => void;
 }
 
@@ -17,7 +18,7 @@ const agoText = (t: number) => {
   return a === "только что" ? a : `${a} назад`;
 };
 
-export default function TopBar({ info, onRefresh, onHotfix, onFetch, fetching, onSwitch }: Props) {
+export default function TopBar({ info, onRefresh, onHotfix, onFetch, fetching, onPalette, onSwitch }: Props) {
   const [busy, setBusy] = useState(false);
   const n = info.changes.length;
   const changesTitle = info.changes.map((c) => `${c.code.padEnd(2)} ${c.path}`).join("\n");
@@ -64,6 +65,10 @@ export default function TopBar({ info, onRefresh, onHotfix, onFetch, fetching, o
       <button className="btn ghost" onClick={refresh} disabled={busy} title="Перечитать репозиторий (⌘R)">
         {busy ? <span className="spin" /> : <RefreshIcon />}
         Обновить
+      </button>
+      <button className="btn ghost" onClick={onPalette} title="Палитра команд">
+        <SearchIcon />
+        <kbd>⌘K</kbd>
       </button>
       <button className="btn hot" onClick={onHotfix} title="hotfix/… от master и hotfix/…-dev от develop">
         <FlameIcon />

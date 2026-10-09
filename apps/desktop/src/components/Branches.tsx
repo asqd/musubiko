@@ -79,9 +79,11 @@ interface Props {
   /** Branches were deleted or restored: re-read the repository. */
   onChanged: () => void;
   onCheckout: (branch: Branch) => void;
+  /** The loaded list, for the command palette. */
+  onList?: (list: Branch[]) => void;
 }
 
-export default function Branches({ info, tick, active, onOpen, onChanged, onCheckout }: Props) {
+export default function Branches({ info, tick, active, onOpen, onChanged, onCheckout, onList }: Props) {
   const baseNames = info.bases.map((b) => b.name);
   const defaultBase = info.bases.find((b) => b.role === "develop")?.name ?? baseNames[0] ?? info.flow.master;
   const [base, setBase] = useState(defaultBase);
@@ -112,6 +114,7 @@ export default function Branches({ info, tick, active, onOpen, onChanged, onChec
       .then((l) => {
         if (id !== request.current) return;
         setList(l);
+        onList?.(l);
         // Keep only the selection that still exists.
         setSelected((s) => new Set(l.filter((b) => s.has(b.name)).map((b) => b.name)));
         setTook(performance.now() - started);
