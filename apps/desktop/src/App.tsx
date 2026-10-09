@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, Branch, errorText, Radar as RadarData, RepoInfo, Settings } from "./api";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
+import { api, Branch, copyReport, errorText, Radar as RadarData, RepoInfo, Settings } from "./api";
 import Welcome from "./components/Welcome";
 import Branches from "./components/Branches";
 import TopBar from "./components/TopBar";
@@ -12,6 +13,7 @@ import Locate from "./components/Locate";
 import CheckoutDialog from "./components/CheckoutDialog";
 import Palette, { Command } from "./palette/Palette";
 import { BranchIcon, FlameIcon, LogIcon, SearchIcon } from "./components/Icons";
+import { ErrorBanner } from "./components/ErrorBanner";
 
 export default function App() {
   const [info, setInfo] = useState<RepoInfo | null>(null);
@@ -275,6 +277,19 @@ export default function App() {
           run: () => void api.clearStatusCache().then(refresh),
         },
         { id: "act:open", group: "Действия", label: "Открыть репозиторий…", hint: <kbd>⌘O</kbd>, run: () => void pickFolder() },
+        {
+          id: "act:report",
+          group: "Действия",
+          label: "Скопировать отчёт о проблеме",
+          hint: "версии и последние записи лога",
+          run: () => void copyReport("(без ошибки: отчёт из палитры команд)").catch(() => undefined),
+        },
+        {
+          id: "act:log",
+          group: "Действия",
+          label: "Показать лог в Finder",
+          run: () => void api.logPath().then((p) => (p ? revealItemInDir(p) : undefined)).catch(() => undefined),
+        },
         { id: "view:branches", group: "Разделы", label: "Ветки", run: () => go("branches") },
         {
           id: "view:hotfixes",
@@ -401,12 +416,7 @@ export default function App() {
         </div>
       </nav>
       <main className="main" ref={mainRef}>
-        {error && (
-          <div className="banner bad" role="alert">
-            {error}
-            <button className="btn sm ghost" onClick={() => setError(null)}>Скрыть</button>
-          </div>
-        )}
+        {error && <ErrorBanner error={error} onClose={() => setError(null)} />}
         {/* The list stays mounted under the diff so going back keeps filters and scroll. */}
         <div hidden={!!diffOf || view !== "branches"}>
           <Branches

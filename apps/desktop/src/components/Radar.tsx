@@ -4,6 +4,7 @@ import { ago, fullDate, plural } from "../format";
 import { StatusPill } from "./Branches";
 import { DeleteDialog, PortDialog } from "./OpDialogs";
 import { FlameIcon } from "./Icons";
+import { ErrorBanner } from "./ErrorBanner";
 
 const STATE: Record<PairState, [string, string]> = {
   lost: ["в master, но не в develop", "bad"],
@@ -71,7 +72,7 @@ export default function Radar({ info, radar, error, loading, onHotfix, onDiff, o
         от {info.flow.develop}. Пары сверяются по содержимому коммитов, поэтому cherry-pick и squash-слияние тоже считаются
         переносом.
       </p>
-      {error && <div className="banner bad">{error}</div>}
+      {error && <ErrorBanner error={error} />}
 
       {radar?.developStaleDays != null && (
         <div className="banner">

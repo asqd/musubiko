@@ -3,6 +3,7 @@ import { api, Branch, CheckoutPlan, errorText, RepoInfo } from "../api";
 import { StatusPill } from "./Branches";
 import DirtyChoice, { WorkMode } from "./DirtyChoice";
 import { Dialog, OpDone, PlanView, RunFooter, StepsView, useOpRunner } from "./OpRun";
+import { ErrorBanner } from "./ErrorBanner";
 
 interface Props {
   info: RepoInfo;
@@ -91,10 +92,10 @@ export default function CheckoutDialog({ info, branch, onClose, onChanged }: Pro
             </label>
           )}
           <PlanView plan={plan} />
-          {planError && <div className="banner bad">{planError}</div>}
+          {planError && <ErrorBanner error={planError} />}
         </>
       )}
-      {runner.error && <div className="banner bad">{runner.error}</div>}
+      {runner.error && <ErrorBanner error={runner.error} />}
     </Dialog>
   );
 }

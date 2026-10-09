@@ -1,4 +1,5 @@
 import { CloseIcon, FolderIcon, Logo } from "./Icons";
+import { ErrorBanner } from "./ErrorBanner";
 
 interface Props {
   recent: string[];
@@ -28,7 +29,7 @@ export default function Welcome({ recent, error, opening, onPick, onOpen, onForg
           {opening ? "Открываю…" : "Открыть репозиторий…"}
           <kbd>⌘O</kbd>
         </button>
-        {error && <div className="banner bad">{error}</div>}
+        {error && <ErrorBanner error={error} />}
         {recent.length > 0 && (
           <div className="recent">
             <h6>Недавние</h6>

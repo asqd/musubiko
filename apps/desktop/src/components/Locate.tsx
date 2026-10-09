@@ -3,6 +3,7 @@ import { api, Commit, CommitPlace, CommitSearch, errorText, Presence, Radar, Rep
 import { ago, copyText, fullDate, plural } from "../format";
 import { SearchIcon } from "./Icons";
 import { PortDialog } from "./OpDialogs";
+import { ErrorBanner } from "./ErrorBanner";
 
 interface Props {
   info: RepoInfo;
@@ -130,7 +131,7 @@ export default function Locate({ info, request, radar, active, onChanged }: Prop
         Номер задачи ищется и в сообщениях коммитов, и в названиях веток. Присутствие в {info.flow.master} и{" "}
         {info.flow.develop} проверяется по самому коммиту, по его cherry-pick и по содержимому (после squash).
       </p>
-      {error && <div className="banner bad">{error}</div>}
+      {error && <ErrorBanner error={error} />}
       {search?.developStaleDays != null && (
         <div className="banner">
           {search.develop} отстаёт от {search.master} на {search.developStaleDays} дней: присутствие в {search.develop} не

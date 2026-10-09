@@ -4,6 +4,7 @@ import { ago } from "../format";
 import { FlameIcon } from "./Icons";
 import { Dialog, OpDone, RunFooter, StepsView, useOpRunner } from "./OpRun";
 import DirtyChoice from "./DirtyChoice";
+import { ErrorBanner } from "./ErrorBanner";
 
 interface Props {
   info: RepoInfo;
@@ -180,7 +181,7 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
                   : "Введите название, чтобы увидеть команды"}
               </pre>
             </div>
-            {error && <div className="banner bad">{error}</div>}
+            {error && <ErrorBanner error={error} />}
           </>
         ) : (
           <>
@@ -188,7 +189,7 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
             {op.status === "done" && <OpDone op={op} />}
           </>
         )}
-        {runner.error && <div className="banner bad">{runner.error}</div>}
+        {runner.error && <ErrorBanner error={runner.error} />}
     </Dialog>
   );
 }

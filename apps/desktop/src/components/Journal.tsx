@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, commandOf, errorText, Operation, OpStatus } from "../api";
 import { fullDate } from "../format";
+import { ErrorBanner } from "./ErrorBanner";
 
 const STATUS: Record<OpStatus, [string, string]> = {
   running: ["идёт", "open"],
@@ -49,7 +50,7 @@ export default function Journal({ tick, onChanged }: { tick: number; onChanged: 
         <h1>Журнал</h1>
         <span className="muted small">Всё, что Musubiko делал с этим репозиторием, с точными командами.</span>
       </div>
-      {error && <div className="banner bad">{error}</div>}
+      {error && <ErrorBanner error={error} />}
       {ops && ops.length === 0 && (
         <div className="tablewrap">
           <div className="empty">
@@ -96,7 +97,7 @@ export default function Journal({ tick, onChanged }: { tick: number; onChanged: 
                 </div>
               </div>
             )}
-            {op.undoError && <div className="banner bad">Отмена остановилась: {op.undoError}</div>}
+            {op.undoError && <ErrorBanner prefix="Отмена остановилась: " error={op.undoError} />}
             <details>
               <summary>
                 {done} из {op.steps.length} шагов

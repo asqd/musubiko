@@ -3,6 +3,7 @@ import { api, Branch, errorText, RepoInfo, Status } from "../api";
 import { ago, copyText, fullDate, plural } from "../format";
 import { CopyIcon, SearchIcon, SwitchIcon, TrashIcon } from "./Icons";
 import { DeleteDialog } from "./OpDialogs";
+import { ErrorBanner } from "./ErrorBanner";
 
 type Filter = "all" | "open" | "merged" | "gone" | "conflict" | "stale" | "unpushed";
 
@@ -277,12 +278,18 @@ export default function Branches({ info, tick, active, onOpen, onChanged, onChec
         ))}
       </div>
 
-      {error && <div className="banner bad">{error}</div>}
+      {error && <ErrorBanner error={error} />}
 
       <div className="tablewrap">
         {list === null ? (
           <div className="empty">
-            <span className="spin" /> Читаю ветки…
+            {loading ? (
+              <>
+                <span className="spin" /> Читаю ветки…
+              </>
+            ) : (
+              "Список веток не прочитан"
+            )}
           </div>
         ) : rows.length === 0 ? (
           <div className="empty">

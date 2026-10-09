@@ -3,6 +3,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, commandOf, errorText, Operation, OpPlan } from "../api";
 import { copyText } from "../format";
+import { CopyReport, ErrorBanner } from "./ErrorBanner";
 
 /** Drives the current operation: runs steps until it finishes or stops, then reports a change. */
 export function useOpRunner(onChanged: () => void) {
@@ -41,6 +42,13 @@ export function useOpRunner(onChanged: () => void) {
   return { op, busy, error, run, running, canClose };
 }
 
+/** What a report says about the failed step. */
+function failedStepText(op: Operation, i: number): string {
+  const st = op.states[i];
+  const error = st?.kind === "failed" ? st.error : "";
+  return `Операция «${op.title}», шаг ${i + 1} из ${op.steps.length} «${op.steps[i]?.title ?? ""}»\n$ ${op.steps[i] ? commandOf(op.steps[i]) : ""}\n\n${error}`;
+}
+
 export function StepsView({ op }: { op: Operation }) {
   const running = op.status === "running";
   const next = op.states.findIndex((x) => x.kind !== "done");
@@ -64,12 +72,15 @@ export function StepsView({ op }: { op: Operation }) {
         })}
       </div>
       {op.status === "failed" && (
-        <div className="warnbox">
-          Остановился на шаге {failedAt + 1} из {op.steps.length}. Предыдущие шаги выполнены, дальше ничего не запускалось.
+        <div className="warnbox row">
+          <span>
+            Остановился на шаге {failedAt + 1} из {op.steps.length}. Предыдущие шаги выполнены, дальше ничего не запускалось.
+          </span>
+          <CopyReport error={failedStepText(op, failedAt)} />
         </div>
       )}
       {op.status === "rolledBack" && <div className="banner ok">Откатил: всё как было до операции.</div>}
-      {op.undoError && <div className="banner bad">Откат остановился: {op.undoError}</div>}
+      {op.undoError && <ErrorBanner prefix="Откат остановился: " error={op.undoError} />}
     </>
   );
 }

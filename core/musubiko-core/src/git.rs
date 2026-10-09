@@ -1,10 +1,43 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
 
 use crate::{Error, Result};
 
 /// `git merge-tree --write-tree` appeared in 2.38; merge status depends on it.
 pub const MIN_VERSION: (u32, u32, u32) = (2, 38, 0);
+
+/// A finished git command, as handed to the hook set with [`set_command_hook`].
+pub struct Finished<'a> {
+    pub dir: &'a Path,
+    pub args: &'a [&'a str],
+    /// `None` when git was killed by a signal.
+    pub code: Option<i32>,
+    pub took: Duration,
+    pub stderr: &'a [u8],
+}
+
+type Hook = Box<dyn Fn(&Finished) + Send + Sync>;
+static HOOK: OnceLock<Hook> = OnceLock::new();
+
+/// Sees every git command Musubiko runs once it finishes; the app logs failures and slow ones.
+/// Set once, before the first command; later calls are ignored.
+pub fn set_command_hook(f: impl Fn(&Finished) + Send + Sync + 'static) {
+    let _ = HOOK.set(Box::new(f));
+}
+
+fn report(dir: &Path, args: &[&str], started: Instant, out: &Output) {
+    if let Some(hook) = HOOK.get() {
+        hook(&Finished {
+            dir,
+            args,
+            code: out.status.code(),
+            took: started.elapsed(),
+            stderr: &out.stderr,
+        });
+    }
+}
 
 /// A git binary new enough for Musubiko.
 #[derive(Debug, Clone)]
@@ -62,7 +95,10 @@ impl Git {
 
     /// Runs git and returns its raw output whatever the exit code.
     pub(crate) fn output(&self, dir: &Path, args: &[&str]) -> Result<Output> {
-        Ok(self.command(dir, args).output()?)
+        let started = Instant::now();
+        let out = self.command(dir, args).output()?;
+        report(dir, args, started, &out);
+        Ok(out)
     }
 
     /// Runs git with `input` on stdin and returns stdout (`git patch-id` reads a patch this way).
@@ -92,6 +128,7 @@ impl Git {
     ) -> Result<Output> {
         use std::io::Write;
         use std::process::Stdio;
+        let started = Instant::now();
         let mut cmd = self.command(dir, args);
         for (k, v) in env {
             cmd.env(k, v);
@@ -106,6 +143,7 @@ impl Git {
         let writer = std::thread::spawn(move || stdin.write_all(&input));
         let out = child.wait_with_output()?;
         let _ = writer.join();
+        report(dir, args, started, &out);
         Ok(out)
     }
 

@@ -26,7 +26,7 @@ pub use diff::{
 };
 pub use error::{Error, Result};
 pub use flow::Flow;
-pub use git::{Git, MIN_VERSION};
+pub use git::{Finished, Git, MIN_VERSION, set_command_hook};
 pub use hotfix::{After, HotfixInput, HotfixPlan, slugify};
 pub use locate::{CommitPlace, CommitSearch, Presence, Verdict};
 pub use ops::{Effect, Guard, OpStatus, Operation, Resume, Step, StepState};

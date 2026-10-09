@@ -5,6 +5,7 @@ import { api, Branch, Commit, errorText, OpPlan, PickState, RepoInfo } from "../
 import { StatusPill } from "./Branches";
 import { copyText, plural } from "../format";
 import { Dialog, OpDone, PlanView, RunFooter, StepsView, useOpRunner } from "./OpRun";
+import { ErrorBanner } from "./ErrorBanner";
 
 interface PortProps {
   info: RepoInfo;
@@ -107,10 +108,10 @@ export function PortDialog({ info, commits, target: initialTarget, create, onClo
             затрагиваются. Ветка передвинется, только когда все коммиты перенесутся; конфликт можно разрешить по ходу.
           </div>
           <PlanView plan={plan} />
-          {planError && <div className="banner bad">{planError}</div>}
+          {planError && <ErrorBanner error={planError} />}
         </>
       )}
-      {runner.error && <div className="banner bad">{runner.error}</div>}
+      {runner.error && <ErrorBanner error={runner.error} />}
     </Dialog>
   );
 }
@@ -214,10 +215,10 @@ export function DeleteDialog({ info, names, branches, onClose, onChanged }: Dele
             </label>
           )}
           <div className="hint">Хэши сохраняются в журнале: оттуда ветки можно вернуть.</div>
-          {planError && <div className="banner bad">{planError}</div>}
+          {planError && <ErrorBanner error={planError} />}
         </>
       )}
-      {runner.error && <div className="banner bad">{runner.error}</div>}
+      {runner.error && <ErrorBanner error={runner.error} />}
     </Dialog>
   );
 }
@@ -255,7 +256,7 @@ function ConflictPanel({ runner, target }: { runner: ReturnType<typeof useOpRunn
     }
   };
 
-  if (!state) return error ? <div className="banner bad">{error}</div> : null;
+  if (!state) return error ? <ErrorBanner error={error} /> : null;
   const left = state.files.filter((f) => !f.resolved).length;
   return (
     <section className="pick">
@@ -306,7 +307,7 @@ function ConflictPanel({ runner, target }: { runner: ReturnType<typeof useOpRunn
         Откройте файлы в редакторе, уберите маркеры <span className="mono">{"<<<<<<<"}</span>, <span className="mono">=======</span>,{" "}
         <span className="mono">{">>>>>>>"}</span> и вернитесь сюда. <span className="mono">git add</span> Musubiko сделает сам.
       </div>
-      {error && <div className="banner bad">{error}</div>}
+      {error && <ErrorBanner error={error} />}
       <div className="pick-actions">
         <button className="btn ghost" onClick={() => void load()}>
           Обновить

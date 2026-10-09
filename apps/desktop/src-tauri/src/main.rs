@@ -4,6 +4,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod journal;
+mod log;
 mod recent;
 mod settings;
 
@@ -66,6 +67,7 @@ async fn open_repo(
     })
     .await?;
     *state.repo.lock().unwrap() = Some(repo);
+    log::write("REPO", &info.root.to_string_lossy());
     recent::remember(&app, &info.root);
     Ok(info)
 }
@@ -146,6 +148,7 @@ async fn start_op(
     }
     let repo = state.repo()?;
     let op = blocking(move || f(&repo)).await?;
+    log::op_changed(None, &op);
     journal::upsert(app, &op);
     *state.op.lock().unwrap() = Some(op.clone());
     Ok(op)
@@ -273,13 +276,15 @@ async fn with_op(
     f: impl FnOnce(&mut Operation, &Repo) + Send + 'static,
 ) -> Result<Operation, String> {
     let repo = state.repo()?;
-    let mut op = state.op.lock().unwrap().clone().ok_or("Нет операции")?;
+    let before = state.op.lock().unwrap().clone().ok_or("Нет операции")?;
+    let mut op = before.clone();
     let op = tauri::async_runtime::spawn_blocking(move || {
         f(&mut op, &repo);
         op
     })
     .await
     .map_err(|e| e.to_string())?;
+    log::op_changed(Some(&before), &op);
     journal::upsert(app, &op);
     *state.op.lock().unwrap() = Some(op.clone());
     Ok(op)
@@ -378,12 +383,14 @@ async fn journal_undo(
 ) -> Result<Operation, String> {
     let git = state.git()?;
     let mut op = journal::get(&app, &id).ok_or("Операции нет в журнале")?;
+    let before = op.clone();
     let op = blocking(move || {
         let repo = Repo::open(git, &op.repo)?;
         op.undo_all(&repo, OpStatus::Undone);
         Ok(op)
     })
     .await?;
+    log::op_changed(Some(&before), &op);
     journal::upsert(&app, &op);
     Ok(op)
 }
@@ -398,8 +405,51 @@ fn forget_repo(path: String, app: AppHandle) -> Vec<String> {
     recent::forget(&app, &path)
 }
 
+/// A line from the web UI: an error it showed, or a script error.
+#[tauri::command]
+fn log_event(level: String, text: String) {
+    log::write(&level, &text);
+}
+
+/// The report for `error`, for the user to paste into a chat.
+#[tauri::command]
+fn error_report(error: String, app: AppHandle, state: State<'_, AppState>) -> String {
+    let git = state
+        .git
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|g| format!("{} — {}", g.version(), g.path().display()));
+    let repo = state
+        .repo
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|r| r.root().to_path_buf());
+    log::report(
+        &app.package_info().version.to_string(),
+        &error,
+        git,
+        repo.as_deref(),
+    )
+}
+
+#[tauri::command]
+fn copy_text(text: String) -> Result<(), String> {
+    log::copy(&text)
+}
+
+#[tauri::command]
+fn log_path() -> Option<String> {
+    log::path().map(|p| p.to_string_lossy().into_owned())
+}
+
 fn main() {
     tauri::Builder::default()
+        .setup(|app| {
+            log::init(app.handle());
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
@@ -436,7 +486,11 @@ fn main() {
             journal_list,
             journal_undo,
             recent_repos,
-            forget_repo
+            forget_repo,
+            log_event,
+            error_report,
+            copy_text,
+            log_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running Musubiko");

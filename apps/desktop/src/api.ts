@@ -297,41 +297,66 @@ export interface Settings {
   compactSidebar: boolean;
 }
 
+/** Invokes a command; an error it returns also goes to the log, so a report can show it. */
+function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  return invoke<T>(cmd, args).catch((e: unknown) => {
+    logEvent("ERROR", `${cmd}: ${errorText(e)}`);
+    throw e;
+  });
+}
+
+/** Writes a line to the app log; never fails. */
+export function logEvent(level: string, text: string): void {
+  invoke("log_event", { level, text }).catch(() => undefined);
+}
+
+/** Puts the error report on the clipboard and returns it. */
+export async function copyReport(error: string): Promise<string> {
+  const report = await invoke<string>("error_report", { error });
+  try {
+    await invoke("copy_text", { text: report });
+  } catch {
+    await navigator.clipboard.writeText(report);
+  }
+  return report;
+}
+
 export const api = {
-  openRepo: (path: string) => invoke<RepoInfo>("open_repo", { path }),
-  repoInfo: () => invoke<RepoInfo>("repo_info"),
-  listBranches: (base: string) => invoke<Branch[]>("list_branches", { base }),
+  logPath: () => invoke<string | null>("log_path"),
+  openRepo: (path: string) => call<RepoInfo>("open_repo", { path }),
+  repoInfo: () => call<RepoInfo>("repo_info"),
+  listBranches: (base: string) => call<Branch[]>("list_branches", { base }),
   branchDiff: (branch: string, base: string, ignoreWhitespace: boolean) =>
-    invoke<BranchDiff>("branch_diff", { branch, base, ignoreWhitespace }),
-  commitDiff: (hash: string, ignoreWhitespace: boolean) => invoke<FileDiff[]>("commit_diff", { hash, ignoreWhitespace }),
-  fileLines: (rev: string, path: string) => invoke<string[]>("file_lines", { rev, path }),
-  conflicts: (branch: string, base: string) => invoke<ConflictFile[]>("conflicts", { branch, base }),
-  planHotfix: (input: HotfixInput) => invoke<HotfixPlan>("plan_hotfix", { input }),
-  startHotfix: (input: HotfixInput) => invoke<Operation>("start_hotfix", { input }),
-  radar: () => invoke<Radar>("hotfix_radar"),
-  planPort: (input: PortInput) => invoke<OpPlan>("plan_port", { input }),
-  startPort: (input: PortInput) => invoke<Operation>("start_port", { input }),
-  planDelete: (input: DeleteInput) => invoke<OpPlan>("plan_delete", { input }),
-  startDelete: (input: DeleteInput) => invoke<Operation>("start_delete", { input }),
-  startFetch: () => invoke<Operation>("start_fetch"),
-  locate: (query: string) => invoke<CommitSearch>("locate", { query }),
-  clearStatusCache: () => invoke<void>("clear_status_cache"),
-  getSettings: () => invoke<Settings>("get_settings"),
-  setSettings: (value: Settings) => invoke<Settings>("set_settings", { value }),
-  fetchQuietly: () => invoke<boolean>("fetch_quietly"),
-  planCheckout: (input: CheckoutInput) => invoke<CheckoutPlan>("plan_checkout", { input }),
-  startCheckout: (input: CheckoutInput) => invoke<Operation>("start_checkout", { input }),
-  opStep: () => invoke<Operation>("op_step"),
-  opPickState: () => invoke<PickState | null>("op_pick_state"),
-  opPickTake: (path: string, side: "branch" | "commit") => invoke<PickState>("op_pick_take", { path, side }),
-  opResume: (skip: boolean) => invoke<Operation>("op_resume", { skip }),
-  opRollback: () => invoke<Operation>("op_rollback"),
-  opLeave: () => invoke<Operation>("op_leave"),
-  opClose: () => invoke<void>("op_close"),
-  journal: () => invoke<Operation[]>("journal_list"),
-  journalUndo: (id: string) => invoke<Operation>("journal_undo", { id }),
-  recentRepos: () => invoke<string[]>("recent_repos"),
-  forgetRepo: (path: string) => invoke<string[]>("forget_repo", { path }),
+    call<BranchDiff>("branch_diff", { branch, base, ignoreWhitespace }),
+  commitDiff: (hash: string, ignoreWhitespace: boolean) => call<FileDiff[]>("commit_diff", { hash, ignoreWhitespace }),
+  fileLines: (rev: string, path: string) => call<string[]>("file_lines", { rev, path }),
+  conflicts: (branch: string, base: string) => call<ConflictFile[]>("conflicts", { branch, base }),
+  planHotfix: (input: HotfixInput) => call<HotfixPlan>("plan_hotfix", { input }),
+  startHotfix: (input: HotfixInput) => call<Operation>("start_hotfix", { input }),
+  radar: () => call<Radar>("hotfix_radar"),
+  planPort: (input: PortInput) => call<OpPlan>("plan_port", { input }),
+  startPort: (input: PortInput) => call<Operation>("start_port", { input }),
+  planDelete: (input: DeleteInput) => call<OpPlan>("plan_delete", { input }),
+  startDelete: (input: DeleteInput) => call<Operation>("start_delete", { input }),
+  startFetch: () => call<Operation>("start_fetch"),
+  locate: (query: string) => call<CommitSearch>("locate", { query }),
+  clearStatusCache: () => call<void>("clear_status_cache"),
+  getSettings: () => call<Settings>("get_settings"),
+  setSettings: (value: Settings) => call<Settings>("set_settings", { value }),
+  fetchQuietly: () => call<boolean>("fetch_quietly"),
+  planCheckout: (input: CheckoutInput) => call<CheckoutPlan>("plan_checkout", { input }),
+  startCheckout: (input: CheckoutInput) => call<Operation>("start_checkout", { input }),
+  opStep: () => call<Operation>("op_step"),
+  opPickState: () => call<PickState | null>("op_pick_state"),
+  opPickTake: (path: string, side: "branch" | "commit") => call<PickState>("op_pick_take", { path, side }),
+  opResume: (skip: boolean) => call<Operation>("op_resume", { skip }),
+  opRollback: () => call<Operation>("op_rollback"),
+  opLeave: () => call<Operation>("op_leave"),
+  opClose: () => call<void>("op_close"),
+  journal: () => call<Operation[]>("journal_list"),
+  journalUndo: (id: string) => call<Operation>("journal_undo", { id }),
+  recentRepos: () => call<string[]>("recent_repos"),
+  forgetRepo: (path: string) => call<string[]>("forget_repo", { path }),
 };
 
 /** Tauri rejects with the Rust error string; anything else is a bug worth showing as is. */

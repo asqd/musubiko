@@ -6,6 +6,7 @@ import FileTree from "./FileTree";
 import FileView, { Mode } from "./FileView";
 import Conflicts from "./Conflicts";
 import { fingerprint } from "./model";
+import { ErrorBanner } from "../components/ErrorBanner";
 
 type Tab = "files" | "commits" | "conflicts";
 
@@ -218,7 +219,7 @@ export default function DiffView({ info, branch, base, tick, onBack, onCheckout 
         </div>
       )}
 
-      {error && <div className="banner bad">{error}</div>}
+      {error && <ErrorBanner error={error} />}
       {(branch.status.kind === "merged" || branch.status.kind === "squashed") && diff && diff.files.length > 0 && (
         <div className="banner ok">
           Ветка уже слита в {diff.target}

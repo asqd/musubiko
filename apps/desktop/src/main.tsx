@@ -8,9 +8,14 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/500.css";
 import "./styles.css";
 import App from "./App";
+import { Crash, logScriptErrors } from "./components/ErrorBanner";
+
+logScriptErrors();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <Crash>
+      <App />
+    </Crash>
   </React.StrictMode>,
 );

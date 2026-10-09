@@ -76,6 +76,21 @@ kbd { font: 500 11px var(--mono); padding: 1px 5px; border: 1px solid var(--line
 .banner.bad { background: var(--bad-weak); color: var(--bad); }
 .banner.ok { background: var(--ok-weak); color: var(--ok); }
 .banner .btn { margin-left: auto; color: inherit; }
+.banner-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.banner-actions { display: flex; gap: 4px; align-self: flex-start; flex-shrink: 0; }
+.banner-actions .btn { margin-left: 0; }
+.warnbox.row { display: flex; align-items: flex-start; gap: 10px; }
+.warnbox.row > span { flex: 1; }
+.warnbox.row .btn { color: inherit; flex-shrink: 0; }
+
+/* crash screen */
+.crash { height: 100%; display: grid; place-items: center; padding: 40px 16px; position: relative; background: var(--bg); }
+.crash .drag { position: absolute; inset: 0 0 auto 0; height: 40px; }
+.crash-card { width: min(640px, 100%); display: grid; gap: 14px; }
+.crash-card h1 { margin: 0; font-size: 22px; }
+.crash-card p { margin: 0; }
+.crash-error { margin: 0; max-height: 40vh; overflow: auto; padding: 12px; border-radius: 8px; background: var(--bad-weak); color: var(--bad); font: 12px/1.5 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.crash-actions { display: flex; gap: 8px; }
 
 /* welcome */
 .welcome { height: 100%; display: grid; place-items: center; padding: 40px 16px; position: relative; }
