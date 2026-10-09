@@ -164,36 +164,7 @@ impl Repo {
                 );
                 worktree_path = Some(p);
             }
-            After::Switch => {
-                let info = self.info()?;
-                if !info.changes.is_empty() {
-                    let from = info.head.clone().unwrap_or_else(|| info.head_short.clone());
-                    steps.push(
-                        Step::new(
-                            format!("Убрать {} изменений в stash", info.changes.len()),
-                            &[
-                                "stash",
-                                "push",
-                                "-u",
-                                "-m",
-                                &format!("musubiko: {from} перед {master_branch}"),
-                            ],
-                        )
-                        .with_effect(Effect::Stash),
-                    );
-                }
-                let (from, detached) = match &info.head {
-                    Some(h) => (h.clone(), false),
-                    None => (self.run(&["rev-parse", "HEAD"])?.trim().to_string(), true),
-                };
-                steps.push(
-                    Step::new(
-                        format!("Переключиться на {master_branch}"),
-                        &["switch", &master_branch],
-                    )
-                    .with_effect(Effect::Switch { from, detached }),
-                );
-            }
+            After::Switch => steps.extend(self.stash_and_switch(&master_branch)?),
         }
 
         Ok(HotfixPlan {
@@ -224,7 +195,7 @@ impl Repo {
     }
 
     /// `~/work/booking-api` → `~/work/booking-api@LT-4900-voucher`.
-    fn worktree_path(&self, slug: &str) -> PathBuf {
+    pub(crate) fn worktree_path(&self, slug: &str) -> PathBuf {
         let name = self
             .root
             .file_name()

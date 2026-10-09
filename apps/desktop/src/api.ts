@@ -257,6 +257,19 @@ export interface CommitSearch {
   developStaleDays: number | null;
 }
 
+export type CheckoutMode = "switch" | "worktree";
+
+export interface CheckoutInput {
+  name: string;
+  mode: CheckoutMode;
+  restoreStash: boolean;
+}
+
+export interface CheckoutPlan extends OpPlan {
+  worktreePath: string;
+  savedStash: string | null;
+}
+
 /** The command line a step runs, as shown to the user. */
 export function commandOf(step: Step): string {
   return ["git", ...step.args.map((a) => (/^[\w\-./:=@^~+,%]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`))].join(" ");
@@ -280,6 +293,8 @@ export const api = {
   startDelete: (input: DeleteInput) => invoke<Operation>("start_delete", { input }),
   startFetch: () => invoke<Operation>("start_fetch"),
   locate: (query: string) => invoke<CommitSearch>("locate", { query }),
+  planCheckout: (input: CheckoutInput) => invoke<CheckoutPlan>("plan_checkout", { input }),
+  startCheckout: (input: CheckoutInput) => invoke<Operation>("start_checkout", { input }),
   opStep: () => invoke<Operation>("op_step"),
   opRollback: () => invoke<Operation>("op_rollback"),
   opLeave: () => invoke<Operation>("op_leave"),

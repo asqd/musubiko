@@ -165,7 +165,7 @@ tr.pair .bname .nohd { width: 12px; height: 10px; border-left: 1.5px solid var(-
 .commit .msg { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
 .hash { font: 12.5px var(--mono); color: var(--accent); background: none; border: 0; padding: 0; }
 .hash:hover { text-decoration: underline; }
-td.acts { text-align: right; width: 1%; }
+td.acts { text-align: right; width: 1%; white-space: nowrap; }
 td.acts .ib { opacity: 0; }
 tr:hover td.acts .ib, td.acts .ib:focus-visible { opacity: 1; }
 .empty { padding: 40px 20px; text-align: center; color: var(--muted); }
@@ -410,3 +410,5 @@ pre.cmds .pending { color: var(--faint); }
 .verdict.bad { background: var(--bad-weak); color: var(--bad); }
 .verdict.warn { background: var(--warn-weak); color: var(--warn); }
 .verdict.ok { background: var(--ok-weak); color: var(--ok); }
+
+.opt small { display: block; color: var(--muted); font-size: 12px; font: 12px var(--mono); }

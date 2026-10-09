@@ -15,6 +15,7 @@ interface Props {
   base: string;
   tick: number;
   onBack: () => void;
+  onCheckout: (b: Branch) => void;
 }
 
 const MODE_KEY = "musubiko:diff-mode";
@@ -29,7 +30,7 @@ function loadJson<T>(key: string, fallback: T): T {
   }
 }
 
-export default function DiffView({ info, branch, base, tick, onBack }: Props) {
+export default function DiffView({ info, branch, base, tick, onBack, onCheckout }: Props) {
   const [diff, setDiff] = useState<BranchDiff | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -183,6 +184,14 @@ export default function DiffView({ info, branch, base, tick, onBack }: Props) {
         </div>
         <StatusPill status={branch.status} target={branch.target} />
         {loading && <span className="spin muted" />}
+        <span className="sp" />
+        {branch.isHead ? (
+          <span className="tag headtag">HEAD</span>
+        ) : (
+          <button className="btn sm" onClick={() => onCheckout(branch)}>
+            Checkout
+          </button>
+        )}
       </div>
 
       {diff && (

@@ -9,6 +9,7 @@ import HotfixDialog from "./components/HotfixDialog";
 import Journal from "./components/Journal";
 import Radar, { needsAttention } from "./components/Radar";
 import Locate from "./components/Locate";
+import CheckoutDialog from "./components/CheckoutDialog";
 import { BranchIcon, FlameIcon, LogIcon, SearchIcon } from "./components/Icons";
 
 export default function App() {
@@ -28,6 +29,7 @@ export default function App() {
   const [radarLoading, setRadarLoading] = useState(false);
   const [hotfixOpen, setHotfixOpen] = useState(false);
   const [fetching, setFetching] = useState(false);
+  const [checkoutOf, setCheckoutOf] = useState<Branch | null>(null);
   const listScroll = useRef(0);
 
   useEffect(() => {
@@ -241,9 +243,10 @@ export default function App() {
           <Branches
             info={info}
             tick={tick}
-            active={!diffOf && view === "branches" && !hotfixOpen}
+            active={!diffOf && view === "branches" && !hotfixOpen && !checkoutOf}
             onOpen={openDiff}
             onChanged={refresh}
+            onCheckout={setCheckoutOf}
           />
         </div>
         <div hidden={!!diffOf || view !== "hotfixes"}>
@@ -262,10 +265,13 @@ export default function App() {
           <Locate info={info} request={findRequest} radar={radar} active={view === "find" && !diffOf} onChanged={refresh} />
         </div>
         {diffOf && (
-          <DiffView key={diffOf.branch.name} info={info} branch={diffOf.branch} base={diffOf.base} tick={tick} onBack={closeDiff} />
+          <DiffView key={diffOf.branch.name} info={info} branch={diffOf.branch} base={diffOf.base} tick={tick} onBack={closeDiff} onCheckout={setCheckoutOf} />
         )}
         {view === "journal" && !diffOf && <Journal tick={tick} onChanged={refresh} />}
       </main>
+      {checkoutOf && (
+        <CheckoutDialog info={info} branch={checkoutOf} onClose={() => setCheckoutOf(null)} onChanged={refresh} />
+      )}
       {hotfixOpen && <HotfixDialog info={info} onClose={() => setHotfixOpen(false)} onChanged={refresh} />}
     </div>
   );

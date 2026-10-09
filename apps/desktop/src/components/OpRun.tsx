@@ -1,6 +1,8 @@
 // Running an operation step by step, shared by every dialog that changes the repository.
 import { ReactNode, useEffect, useState } from "react";
+import { revealItemInDir } from "@tauri-apps/plugin-opener";
 import { api, commandOf, errorText, Operation, OpPlan } from "../api";
+import { copyText } from "../format";
 
 /** Drives the current operation: runs steps until it finishes or stops, then reports a change. */
 export function useOpRunner(onChanged: () => void) {
@@ -189,6 +191,32 @@ export function Dialog({
         <div className="body">{children}</div>
         <footer>{footer}</footer>
       </div>
+    </div>
+  );
+}
+
+/** "Done", with the new folder when the operation opened a worktree. */
+export function OpDone({ op }: { op: Operation }) {
+  const [copied, setCopied] = useState(false);
+  const wt = op.steps.find((s) => s.args[0] === "worktree" && s.args[1] === "add" && s.args[2] !== "--detach")?.args[2];
+  return (
+    <div className="banner ok col">
+      <b>Готово.</b>
+      {wt ? (
+        <div className="wt">
+          <span>
+            Папка <span className="mono">{wt.replace(/^\/Users\/[^/]+/, "~")}</span>
+          </span>
+          <button className="btn sm" onClick={() => revealItemInDir(wt).catch(() => undefined)}>
+            Показать в Finder
+          </button>
+          <button className="btn sm" onClick={async () => setCopied(await copyText(wt))}>
+            {copied ? "Скопировано" : "Скопировать путь"}
+          </button>
+        </div>
+      ) : (
+        <span>Отменить можно в журнале.</span>
+      )}
     </div>
   );
 }

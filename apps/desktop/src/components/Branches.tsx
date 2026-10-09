@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, Branch, errorText, RepoInfo, Status } from "../api";
 import { ago, copyText, fullDate, plural } from "../format";
-import { CopyIcon, SearchIcon, TrashIcon } from "./Icons";
+import { CopyIcon, SearchIcon, SwitchIcon, TrashIcon } from "./Icons";
 import { DeleteDialog } from "./OpDialogs";
 
 type Filter = "all" | "open" | "merged" | "gone" | "conflict" | "stale" | "unpushed";
@@ -78,9 +78,10 @@ interface Props {
   onOpen: (branch: Branch, base: string) => void;
   /** Branches were deleted or restored: re-read the repository. */
   onChanged: () => void;
+  onCheckout: (branch: Branch) => void;
 }
 
-export default function Branches({ info, tick, active, onOpen, onChanged }: Props) {
+export default function Branches({ info, tick, active, onOpen, onChanged, onCheckout }: Props) {
   const baseNames = info.bases.map((b) => b.name);
   const defaultBase = info.bases.find((b) => b.role === "develop")?.name ?? baseNames[0] ?? info.flow.master;
   const [base, setBase] = useState(defaultBase);
@@ -319,6 +320,7 @@ export default function Branches({ info, tick, active, onOpen, onChanged }: Prop
                   onSelect={() => toggle(b.name)}
                   onCopy={copy}
                   onOpen={() => onOpen(b, base)}
+                  onCheckout={() => onCheckout(b)}
                 />
               ))}
             </tbody>
@@ -367,9 +369,10 @@ interface RowProps {
   onSelect: () => void;
   onCopy: (t: string) => void;
   onOpen: () => void;
+  onCheckout: () => void;
 }
 
-function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen }: RowProps) {
+function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen, onCheckout }: RowProps) {
   const slash = b.name.indexOf("/");
   const pre = slash > 0 ? b.name.slice(0, slash + 1) : "";
   const rest = slash > 0 ? b.name.slice(slash + 1) : b.name;
@@ -440,6 +443,19 @@ function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen }: RowProp
       </td>
       <td className="muted num" title={fullDate(b.tip.date)}>{ago(b.tip.date, now)}</td>
       <td className="acts">
+        {!b.isHead && (
+          <button
+            className="ib"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCheckout();
+            }}
+            title="Checkout: переключиться или открыть в отдельной папке"
+            aria-label={`Checkout ${b.name}`}
+          >
+            <SwitchIcon />
+          </button>
+        )}
         <button
           className="ib"
           onClick={(e) => {

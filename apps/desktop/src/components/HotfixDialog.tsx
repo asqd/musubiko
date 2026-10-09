@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { After, api, errorText, HotfixPlan, Operation, RepoInfo } from "../api";
-import { ago, copyText, plural } from "../format";
+import { After, api, errorText, HotfixPlan, RepoInfo } from "../api";
+import { ago } from "../format";
 import { FlameIcon } from "./Icons";
-import { Dialog, RunFooter, StepsView, useOpRunner } from "./OpRun";
+import { Dialog, OpDone, RunFooter, StepsView, useOpRunner } from "./OpRun";
+import DirtyChoice from "./DirtyChoice";
 
 interface Props {
   info: RepoInfo;
@@ -144,64 +144,14 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
 
             <div className={`after ${stay ? "off" : ""}`}>
               <div className="cmdhead">После создания</div>
-              {dirty > 0 && (
-                <div className="warnbox">
-                  <b>
-                    В <span className="mono">{info.head ?? info.headShort}</span> {dirty}{" "}
-                    {plural(dirty, "незакоммиченное изменение", "незакоммиченных изменения", "незакоммиченных изменений")}:
-                  </b>
-                  <ul className="dfiles">
-                    {info.changes.slice(0, 6).map((c) => (
-                      <li key={c.path}>
-                        <span className="s">{c.code}</span>
-                        {c.path}
-                      </li>
-                    ))}
-                    {dirty > 6 && <li className="faint">и ещё {dirty - 6}</li>}
-                  </ul>
-                  Чтобы их не задеть, hotfix откроется в отдельной папке (worktree). Если удобнее работать здесь, могу убрать
-                  изменения в stash и переключиться.
-                </div>
-              )}
-              <div className="modepick" role="group" aria-label="Как открыть hotfix">
-                {(dirty
-                  ? ([
-                      ["worktree", "Worktree", "отдельная папка, здесь ничего не трогаю", true],
-                      ["switch", "Stash и переключиться", "изменения уйдут в stash, переключусь в этой папке", false],
-                    ] as const)
-                  : ([
-                      ["switch", "Переключиться здесь", "рабочая копия чистая, stash не нужен", false],
-                      ["worktree", "Worktree", "отдельная папка", false],
-                    ] as const)
-                ).map(([k, title, sub, rec]) => (
-                  <button key={k} type="button" className={`mode ${mode === k ? "on" : ""}`} aria-pressed={mode === k} onClick={() => setMode(k)}>
-                    <b>
-                      {title}
-                      {rec && <span className="rec">рекомендую</span>}
-                    </b>
-                    <small>{sub}</small>
-                  </button>
-                ))}
-              </div>
-              <div className="hint">
-                {mode === "worktree" ? (
-                  <>
-                    Создам папку <span className="mono">{plan?.worktreePath?.replace(/^\/Users\/[^/]+/, "~") ?? "…"}</span> с веткой{" "}
-                    <span className="mono">{plan?.slug ? plan.masterBranch : "hotfix/…"}</span>.
-                    {dirty > 0 && " Здесь всё останется как есть."}
-                  </>
-                ) : dirty > 0 ? (
-                  <>
-                    Все изменения, включая новые файлы, уйдут в stash. Чтобы вернуть: переключитесь обратно на{" "}
-                    <span className="mono">{info.head}</span> и сделайте <span className="mono">git stash pop</span>, или отмените
-                    операцию в журнале.
-                  </>
-                ) : (
-                  <>
-                    Переключусь на <span className="mono">{plan?.slug ? plan.masterBranch : "hotfix/…"}</span> в этой папке.
-                  </>
-                )}
-              </div>
+              <DirtyChoice
+                info={info}
+                mode={mode}
+                onMode={setMode}
+                target={plan?.slug ? plan.masterBranch : `${info.flow.hotfixPrefix}…`}
+                worktreePath={plan?.worktreePath ?? null}
+                subject="hotfix откроется"
+              />
               <label className="opt">
                 <input type="checkbox" checked={stay} onChange={(e) => setStay(e.target.checked)} />
                 <span>Только создать ветки, никуда не переключаться</span>
@@ -235,40 +185,10 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
         ) : (
           <>
             <StepsView op={op} />
-            {op.status === "done" && <Done op={op} />}
+            {op.status === "done" && <OpDone op={op} />}
           </>
         )}
         {runner.error && <div className="banner bad">{runner.error}</div>}
     </Dialog>
-  );
-}
-
-function Done({ op }: { op: Operation }) {
-  const [copied, setCopied] = useState(false);
-  const wt = op.steps.find((s) => s.args[0] === "worktree")?.args[2];
-  return (
-    <div className="banner ok col">
-      <b>Готово.</b>
-      {wt ? (
-        <div className="wt">
-          <span>
-            Папка <span className="mono">{wt.replace(/^\/Users\/[^/]+/, "~")}</span>
-          </span>
-          <button className="btn sm" onClick={() => revealItemInDir(wt).catch(() => undefined)}>
-            Показать в Finder
-          </button>
-          <button
-            className="btn sm"
-            onClick={async () => {
-              setCopied(await copyText(wt));
-            }}
-          >
-            {copied ? "Скопировано" : "Скопировать путь"}
-          </button>
-        </div>
-      ) : (
-        <span>Отменить можно в журнале.</span>
-      )}
-    </div>
   );
 }

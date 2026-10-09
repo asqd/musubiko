@@ -23,6 +23,9 @@ export const CloseIcon = () => (
 export const DownloadIcon = () => (
   <svg {...base}><path d="M8 2.5v8M4.5 7 8 10.5 11.5 7M3 13.5h10" /></svg>
 );
+export const SwitchIcon = () => (
+  <svg {...base}><path d="M3 5h9l-2.5-2.5M13 11H4l2.5 2.5" /></svg>
+);
 export const TrashIcon = () => (
   <svg {...base} strokeWidth={1.5}><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5" /></svg>
 );

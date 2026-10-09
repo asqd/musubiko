@@ -10,8 +10,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 
 use musubiko_core::{
-    Branch, BranchDiff, CommitSearch, ConflictFile, DeleteInput, FileDiff, Git, HotfixInput,
-    HotfixPlan, OpPlan, OpStatus, Operation, PortInput, Radar, Repo, RepoInfo,
+    Branch, BranchDiff, CheckoutInput, CheckoutPlan, CommitSearch, ConflictFile, DeleteInput,
+    FileDiff, Git, HotfixInput, HotfixPlan, OpPlan, OpStatus, Operation, PortInput, Radar, Repo,
+    RepoInfo,
 };
 use tauri::{AppHandle, State};
 
@@ -180,6 +181,24 @@ async fn start_port(
 }
 
 #[tauri::command]
+async fn plan_checkout(
+    input: CheckoutInput,
+    state: State<'_, AppState>,
+) -> Result<CheckoutPlan, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.plan_checkout(&input)).await
+}
+
+#[tauri::command]
+async fn start_checkout(
+    input: CheckoutInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Operation, String> {
+    start_op(&app, &state, move |repo| repo.start_checkout(&input)).await
+}
+
+#[tauri::command]
 async fn locate(query: String, state: State<'_, AppState>) -> Result<CommitSearch, String> {
     let repo = state.repo()?;
     blocking(move || repo.locate(&query)).await
@@ -315,6 +334,8 @@ fn main() {
             start_delete,
             start_fetch,
             locate,
+            plan_checkout,
+            start_checkout,
             op_step,
             op_rollback,
             op_leave,
