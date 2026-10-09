@@ -129,3 +129,27 @@ fn deleting_on_the_server_only_keeps_the_local_branch() {
     assert!(f.has_branch("feature/a"));
     assert!(!f.remote_heads().contains(&"feature/a".to_string()));
 }
+
+#[test]
+fn a_quiet_fetch_updates_without_an_operation() {
+    let f = with_origin();
+    let origin = f.root.parent().unwrap().join("origin.git");
+    // Someone else pushes a branch.
+    f.git_in(&origin, &["branch", "feature/theirs", "develop"]);
+    let repo = f.repo();
+    assert!(
+        !repo
+            .branches("develop")
+            .unwrap()
+            .iter()
+            .any(|b| b.name == "feature/theirs")
+    );
+    repo.fetch_quietly().unwrap();
+    assert!(
+        repo.branches("develop")
+            .unwrap()
+            .iter()
+            .any(|b| b.name == "feature/theirs")
+    );
+    assert!(repo.info().unwrap().last_fetch.is_some());
+}

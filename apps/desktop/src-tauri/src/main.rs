@@ -5,6 +5,7 @@
 
 mod journal;
 mod recent;
+mod settings;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -198,6 +199,38 @@ async fn start_checkout(
     start_op(&app, &state, move |repo| repo.start_checkout(&input)).await
 }
 
+#[tauri::command]
+fn get_settings(app: AppHandle) -> settings::Settings {
+    settings::load(&app)
+}
+
+#[tauri::command]
+fn set_settings(value: settings::Settings, app: AppHandle) -> settings::Settings {
+    let value = settings::Settings {
+        fetch_interval_min: value.fetch_interval_min.clamp(1, 24 * 60),
+        ..value
+    };
+    settings::save(&app, &value);
+    value
+}
+
+/// A background fetch: not journaled, skipped while an operation is running.
+/// Returns false when it was skipped.
+#[tauri::command]
+async fn fetch_quietly(state: State<'_, AppState>) -> Result<bool, String> {
+    if state
+        .op
+        .lock()
+        .unwrap()
+        .as_ref()
+        .is_some_and(|o| matches!(o.status, OpStatus::Running | OpStatus::Failed))
+    {
+        return Ok(false);
+    }
+    let repo = state.repo()?;
+    blocking(move || repo.fetch_quietly().map(|_| true)).await
+}
+
 /// Drops cached branch statuses; the next listing computes everything again.
 #[tauri::command]
 async fn clear_status_cache(state: State<'_, AppState>) -> Result<(), String> {
@@ -388,6 +421,9 @@ fn main() {
             start_fetch,
             locate,
             clear_status_cache,
+            get_settings,
+            set_settings,
+            fetch_quietly,
             plan_checkout,
             start_checkout,
             op_step,

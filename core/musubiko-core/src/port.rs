@@ -377,6 +377,15 @@ impl Repo {
         self.plan_delete(input)?.into_operation(self)
     }
 
+    /// The same fetch as [`Repo::plan_fetch`], run directly: for background refreshes that
+    /// should not fill the journal.
+    pub fn fetch_quietly(&self) -> Result<()> {
+        let Some(rm) = self.remote.clone() else {
+            return Ok(());
+        };
+        self.run(&["fetch", "--prune", "--quiet", &rm]).map(|_| ())
+    }
+
     /// Fetches everything and drops remote-tracking branches deleted on the server, so merged
     /// statuses and "deleted on the server" are current. Nothing to undo: it only reads.
     pub fn plan_fetch(&self) -> Result<OpPlan> {

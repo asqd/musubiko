@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, Branch, errorText, Radar as RadarData, RepoInfo } from "./api";
+import { api, Branch, errorText, Radar as RadarData, RepoInfo, Settings } from "./api";
 import Welcome from "./components/Welcome";
 import Branches from "./components/Branches";
 import TopBar from "./components/TopBar";
@@ -32,12 +32,27 @@ export default function App() {
   const [fetching, setFetching] = useState(false);
   const [checkoutOf, setCheckoutOf] = useState<Branch | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [settings, setSettings] = useState<Settings>({ backgroundFetch: false, fetchIntervalMin: 15 });
+  // Outcome of the last background fetch; a failure is shown quietly next to the fetch button.
+  const [bgFetch, setBgFetch] = useState<{ ok: boolean; at: number; error?: string } | null>(null);
+  const bgBusy = useRef(false);
+  const bgLastTry = useRef(0);
   const [branchList, setBranchList] = useState<Branch[]>([]);
   const listScroll = useRef(0);
 
   useEffect(() => {
     api.recentRepos().then(setRecent).catch(() => setRecent([]));
+    api.getSettings().then(setSettings).catch(() => undefined);
   }, []);
+
+  const saveSettings = async (next: Settings) => {
+    setSettings(next);
+    try {
+      setSettings(await api.setSettings(next));
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
 
   const openPath = useCallback(async (path: string) => {
     setOpening(true);
@@ -124,6 +139,33 @@ export default function App() {
     };
   }, [info?.root, tick]);
 
+  // Background fetch, only when turned on. It counts any fetch (button, terminal) via FETCH_HEAD,
+  // waits a full interval after a failed try, and stays out of the way of running operations.
+  useEffect(() => {
+    if (!info?.remote || !settings.backgroundFetch) return;
+    const interval = settings.fetchIntervalMin * 60;
+    const check = async () => {
+      const now = Date.now() / 1000;
+      const last = Math.max(info.lastFetch ?? 0, bgLastTry.current);
+      if (bgBusy.current || fetching || now - last < interval) return;
+      bgBusy.current = true;
+      bgLastTry.current = now;
+      try {
+        if (await api.fetchQuietly()) {
+          setBgFetch({ ok: true, at: now });
+          await refresh();
+        }
+      } catch (e) {
+        setBgFetch({ ok: false, at: now, error: errorText(e) });
+      } finally {
+        bgBusy.current = false;
+      }
+    };
+    void check();
+    const t = window.setInterval(check, 60_000);
+    return () => window.clearInterval(t);
+  }, [info?.root, info?.remote, info?.lastFetch, settings, fetching, refresh]);
+
   // git fetch --prune as a journaled operation; a failure is shown and the operation closed.
   const fetchNow = async () => {
     if (fetching) return;
@@ -132,12 +174,14 @@ export default function App() {
     try {
       let op = await api.startFetch();
       while (op.status === "running") op = await api.opStep();
+      bgLastTry.current = Date.now() / 1000;
       if (op.status === "failed") {
         const failed = op.states.find((s) => s.kind === "failed");
         setError(`Не получилось обновиться с сервера: ${failed && failed.kind === "failed" ? failed.error : ""}`);
         await api.opLeave();
       } else {
         await api.opClose();
+        setBgFetch(null);
       }
       await refresh();
     } catch (e) {
@@ -185,6 +229,25 @@ export default function App() {
           ? [{ id: "act:fetch", group: "Действия", label: "Получить с сервера", hint: "git fetch --prune", run: () => void fetchNow() }]
           : []),
         { id: "act:refresh", group: "Действия", label: "Обновить", hint: <kbd>⌘R</kbd>, run: () => void refresh() },
+        ...(info.remote
+          ? [
+              settings.backgroundFetch
+                ? {
+                    id: "act:bg-off",
+                    group: "Действия",
+                    label: "Выключить автоматическое получение",
+                    hint: `сейчас каждые ${settings.fetchIntervalMin} мин`,
+                    run: () => void saveSettings({ ...settings, backgroundFetch: false }),
+                  }
+                : {
+                    id: "act:bg-on",
+                    group: "Действия",
+                    label: "Включить автоматическое получение",
+                    hint: `каждые ${settings.fetchIntervalMin} мин`,
+                    run: () => void saveSettings({ ...settings, backgroundFetch: true }),
+                  },
+            ]
+          : []),
         {
           id: "act:recompute",
           group: "Действия",
@@ -247,6 +310,9 @@ export default function App() {
         onFetch={fetchNow}
         fetching={fetching}
         onPalette={() => setPaletteOpen(true)}
+        settings={settings}
+        onSettings={saveSettings}
+        bgFetch={bgFetch}
         onSwitch={() => {
           setInfo(null);
           setDiffOf(null);

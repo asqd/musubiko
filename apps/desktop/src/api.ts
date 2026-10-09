@@ -290,6 +290,11 @@ export function commandOf(step: Step): string {
   return ["git", ...step.args.map((a) => (/^[\w\-./:=@^~+,%]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`))].join(" ");
 }
 
+export interface Settings {
+  backgroundFetch: boolean;
+  fetchIntervalMin: number;
+}
+
 export const api = {
   openRepo: (path: string) => invoke<RepoInfo>("open_repo", { path }),
   repoInfo: () => invoke<RepoInfo>("repo_info"),
@@ -309,6 +314,9 @@ export const api = {
   startFetch: () => invoke<Operation>("start_fetch"),
   locate: (query: string) => invoke<CommitSearch>("locate", { query }),
   clearStatusCache: () => invoke<void>("clear_status_cache"),
+  getSettings: () => invoke<Settings>("get_settings"),
+  setSettings: (value: Settings) => invoke<Settings>("set_settings", { value }),
+  fetchQuietly: () => invoke<boolean>("fetch_quietly"),
   planCheckout: (input: CheckoutInput) => invoke<CheckoutPlan>("plan_checkout", { input }),
   startCheckout: (input: CheckoutInput) => invoke<Operation>("start_checkout", { input }),
   opStep: () => invoke<Operation>("op_step"),
