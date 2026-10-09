@@ -293,6 +293,8 @@ export function commandOf(step: Step): string {
 export interface Settings {
   backgroundFetch: boolean;
   fetchIntervalMin: number;
+  /** Left panel shows icons only, names on hover. */
+  compactSidebar: boolean;
 }
 
 export const api = {

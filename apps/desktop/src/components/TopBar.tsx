@@ -135,7 +135,7 @@ export default function TopBar({
                     type="radio"
                     name="bg-fetch"
                     checked={settings.backgroundFetch && settings.fetchIntervalMin === m}
-                    onChange={() => onSettings({ backgroundFetch: true, fetchIntervalMin: m })}
+                    onChange={() => onSettings({ ...settings, backgroundFetch: true, fetchIntervalMin: m })}
                   />
                   Каждые {m} мин
                 </label>

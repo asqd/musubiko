@@ -32,7 +32,7 @@ export default function App() {
   const [fetching, setFetching] = useState(false);
   const [checkoutOf, setCheckoutOf] = useState<Branch | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
-  const [settings, setSettings] = useState<Settings>({ backgroundFetch: false, fetchIntervalMin: 15 });
+  const [settings, setSettings] = useState<Settings>({ backgroundFetch: false, fetchIntervalMin: 15, compactSidebar: false });
   // Outcome of the last background fetch; a failure is shown quietly next to the fetch button.
   const [bgFetch, setBgFetch] = useState<{ ok: boolean; at: number; error?: string } | null>(null);
   const bgBusy = useRef(false);
@@ -44,6 +44,8 @@ export default function App() {
     api.recentRepos().then(setRecent).catch(() => setRecent([]));
     api.getSettings().then(setSettings).catch(() => undefined);
   }, []);
+
+  const compact = settings.compactSidebar;
 
   const saveSettings = async (next: Settings) => {
     setSettings(next);
@@ -99,6 +101,11 @@ export default function App() {
         if (!document.querySelector(".backdrop:not(.pal-back)")) setPaletteOpen((v) => !v);
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleCompactRef.current();
+        return;
+      }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
         void refresh();
@@ -138,6 +145,11 @@ export default function App() {
       live = false;
     };
   }, [info?.root, tick]);
+
+  const toggleCompact = () => void saveSettings({ ...settings, compactSidebar: !settings.compactSidebar });
+  // The key handler is registered once; it calls whatever the latest toggle is.
+  const toggleCompactRef = useRef(toggleCompact);
+  toggleCompactRef.current = toggleCompact;
 
   // Background fetch, only when turned on. It counts any fetch (button, terminal) via FETCH_HEAD,
   // waits a full interval after a failed try, and stays out of the way of running operations.
@@ -249,6 +261,13 @@ export default function App() {
             ]
           : []),
         {
+          id: "act:compact",
+          group: "Действия",
+          label: compact ? "Развернуть левую панель" : "Свернуть левую панель до иконок",
+          hint: <kbd>⌘B</kbd>,
+          run: toggleCompact,
+        },
+        {
           id: "act:recompute",
           group: "Действия",
           label: "Пересчитать статусы веток с нуля",
@@ -302,7 +321,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${compact ? "compact" : ""}`}>
       <TopBar
         info={info}
         onRefresh={refresh}
@@ -320,54 +339,65 @@ export default function App() {
         }}
       />
       <nav className="side" aria-label="Разделы">
-        <button
-          className={`nav ${view === "branches" ? "on" : ""}`}
-          onClick={() => {
-            setView("branches");
-            if (diffOf) closeDiff();
-          }}
-        >
-          <BranchIcon />
-          Ветки
-        </button>
-        <button
-          className={`nav ${view === "hotfixes" ? "on" : ""}`}
-          onClick={() => {
-            setView("hotfixes");
-            setDiffOf(null);
-          }}
-        >
-          <FlameIcon />
-          Хотфиксы
-          {needsAttention(radar) > 0 && (
-            <span className="badge" title="Требуют внимания">
-              {needsAttention(radar)}
-            </span>
-          )}
-        </button>
-        <button
-          className={`nav ${view === "find" ? "on" : ""}`}
-          onClick={() => {
-            setView("find");
-            setDiffOf(null);
-          }}
-        >
-          <SearchIcon />
-          Где коммит?
-        </button>
-        <button
-          className={`nav ${view === "journal" ? "on" : ""}`}
-          onClick={() => {
-            setView("journal");
-            setDiffOf(null);
-          }}
-        >
-          <LogIcon />
-          Журнал
-        </button>
+        {(
+          [
+            ["branches", <BranchIcon />, "Ветки"],
+            ["hotfixes", <FlameIcon />, "Хотфиксы"],
+            ["find", <SearchIcon />, "Где коммит?"],
+            ["journal", <LogIcon />, "Журнал"],
+          ] as const
+        ).map(([v, icon, label]) => {
+          const badge = v === "hotfixes" ? needsAttention(radar) : 0;
+          return (
+            <button
+              key={v}
+              className={`nav ${view === v ? "on" : ""}`}
+              data-tip={compact ? (badge ? `${label} · требуют внимания: ${badge}` : label) : undefined}
+              aria-label={label}
+              onClick={() => {
+                setView(v);
+                if (v === "branches" && diffOf) closeDiff();
+                else setDiffOf(null);
+              }}
+            >
+              <span className="nav-ic">
+                {icon}
+                {badge > 0 && compact && <span className="dot-badge">{badge}</span>}
+              </span>
+              <span className="nav-label">{label}</span>
+              {badge > 0 && !compact && (
+                <span className="badge" title="Требуют внимания">
+                  {badge}
+                </span>
+              )}
+            </button>
+          );
+        })}
         <div className="side-foot">
-          <div className="faint" title={info.root}>{info.root.replace(/^\/Users\/[^/]+/, "~")}</div>
-          <div className="faint">git {info.git.split(" ")[0]}</div>
+          {!compact && (
+            <>
+              <div className="faint" title={info.root}>
+                {info.root.replace(/^\/Users\/[^/]+/, "~")}
+              </div>
+              <div className="faint">git {info.git.split(" ")[0]}</div>
+            </>
+          )}
+          <button
+            className="nav collapse"
+            onClick={toggleCompact}
+            data-tip={compact ? "Развернуть панель (⌘B)" : undefined}
+            aria-label={compact ? "Развернуть панель" : "Свернуть панель"}
+            title={compact ? undefined : "Оставить одни иконки (⌘B)"}
+          >
+            <span className="nav-ic">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <rect x="2" y="3" width="12" height="10" rx="1.5" />
+                <path d="M6 3v10" />
+                <path d={compact ? "m9 6.5 1.5 1.5L9 9.5" : "m10.5 6.5L9 8l1.5 1.5"} />
+              </svg>
+            </span>
+            <span className="nav-label">Свернуть панель</span>
+          </button>
         </div>
       </nav>
       <main className="main" ref={mainRef}>

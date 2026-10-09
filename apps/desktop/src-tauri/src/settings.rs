@@ -12,6 +12,8 @@ pub struct Settings {
     pub background_fetch: bool,
     /// Minutes between background fetches.
     pub fetch_interval_min: u32,
+    /// The left panel shows icons only.
+    pub compact_sidebar: bool,
 }
 
 impl Default for Settings {
@@ -19,6 +21,7 @@ impl Default for Settings {
         Settings {
             background_fetch: false,
             fetch_interval_min: 15,
+            compact_sidebar: false,
         }
     }
 }
