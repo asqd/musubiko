@@ -50,7 +50,7 @@ const PILL: Record<Status["kind"], [string, string]> = {
   unknown: ["?", "mute"],
 };
 
-function StatusPill({ status, target }: { status: Status; target: string }) {
+export function StatusPill({ status, target }: { status: Status; target: string }) {
   const [label, cls] = PILL[status.kind];
   let title = "";
   if (status.kind === "merged") title = `Все коммиты ветки уже в ${target}`;
@@ -67,7 +67,15 @@ function StatusPill({ status, target }: { status: Status; target: string }) {
   );
 }
 
-export default function Branches({ info, tick }: { info: RepoInfo; tick: number }) {
+interface Props {
+  info: RepoInfo;
+  tick: number;
+  /** False while another view covers the list: keyboard shortcuts stay quiet. */
+  active: boolean;
+  onOpen: (branch: Branch, base: string) => void;
+}
+
+export default function Branches({ info, tick, active, onOpen }: Props) {
   const baseNames = info.bases.map((b) => b.name);
   const defaultBase = info.bases.find((b) => b.role === "develop")?.name ?? baseNames[0] ?? info.flow.master;
   const [base, setBase] = useState(defaultBase);
@@ -103,6 +111,7 @@ export default function Branches({ info, tick }: { info: RepoInfo; tick: number 
   }, [base, info.root, tick]);
 
   useEffect(() => {
+    if (!active) return;
     const onKey = (e: KeyboardEvent) => {
       const typing = document.activeElement instanceof HTMLInputElement;
       if (e.key === "/" && !typing) {
@@ -116,7 +125,7 @@ export default function Branches({ info, tick }: { info: RepoInfo; tick: number 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [active]);
 
   const now = Date.now() / 1000;
   const myEmail = info.user.email.toLowerCase();
@@ -259,7 +268,7 @@ export default function Branches({ info, tick }: { info: RepoInfo; tick: number 
             </thead>
             <tbody>
               {rows.map((b) => (
-                <Row key={b.name} b={b} info={info} base={base} now={now} onCopy={copy} />
+                <Row key={b.name} b={b} info={info} base={base} now={now} onCopy={copy} onOpen={() => onOpen(b, base)} />
               ))}
             </tbody>
           </table>
@@ -270,7 +279,16 @@ export default function Branches({ info, tick }: { info: RepoInfo; tick: number 
   );
 }
 
-function Row({ b, info, base, now, onCopy }: { b: Branch; info: RepoInfo; base: string; now: number; onCopy: (t: string) => void }) {
+interface RowProps {
+  b: Branch;
+  info: RepoInfo;
+  base: string;
+  now: number;
+  onCopy: (t: string) => void;
+  onOpen: () => void;
+}
+
+function Row({ b, info, base, now, onCopy, onOpen }: RowProps) {
   const slash = b.name.indexOf("/");
   const pre = slash > 0 ? b.name.slice(0, slash + 1) : "";
   const rest = slash > 0 ? b.name.slice(slash + 1) : b.name;
@@ -278,7 +296,13 @@ function Row({ b, info, base, now, onCopy }: { b: Branch; info: RepoInfo; base: 
   const pair = b.name.startsWith(hotfixPrefix) && b.name.endsWith(devSuffix);
   const owner = b.owner.name || b.tip.author.name;
   return (
-    <tr className={`${pair ? "pair" : ""} ${b.isHead ? "headrow" : ""}`}>
+    <tr
+      className={`${pair ? "pair" : ""} ${b.isHead ? "headrow" : ""}`}
+      onClick={onOpen}
+      onKeyDown={(e) => e.key === "Enter" && onOpen()}
+      tabIndex={0}
+      title="Открыть дифф"
+    >
       <td>
         <div className="bname">
           {b.isHead ? <span className="hd" title="HEAD" /> : <span className="nohd" />}
@@ -305,7 +329,14 @@ function Row({ b, info, base, now, onCopy }: { b: Branch; info: RepoInfo; base: 
       <td title={b.owner.email}>{owner}</td>
       <td>
         <div className="commit">
-          <button className="hash" onClick={() => onCopy(b.tip.hash)} title="Скопировать хэш">
+          <button
+            className="hash"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCopy(b.tip.hash);
+            }}
+            title="Скопировать хэш"
+          >
             {b.tip.short}
           </button>
           <span className="msg" title={b.tip.subject}>{b.tip.subject}</span>
@@ -313,7 +344,15 @@ function Row({ b, info, base, now, onCopy }: { b: Branch; info: RepoInfo; base: 
       </td>
       <td className="muted num" title={fullDate(b.tip.date)}>{ago(b.tip.date, now)}</td>
       <td className="acts">
-        <button className="ib" onClick={() => onCopy(b.name)} title="Скопировать имя ветки" aria-label="Скопировать имя ветки">
+        <button
+          className="ib"
+          onClick={(e) => {
+            e.stopPropagation();
+            onCopy(b.name);
+          }}
+          title="Скопировать имя ветки"
+          aria-label="Скопировать имя ветки"
+        >
           <CopyIcon />
         </button>
       </td>

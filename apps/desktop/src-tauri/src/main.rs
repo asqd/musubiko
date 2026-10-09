@@ -8,7 +8,7 @@ mod recent;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use musubiko_core::{Branch, Git, Repo, RepoInfo};
+use musubiko_core::{Branch, BranchDiff, ConflictFile, FileDiff, Git, Repo, RepoInfo};
 use tauri::{AppHandle, State};
 
 #[derive(Default)]
@@ -67,6 +67,35 @@ async fn list_branches(base: String, state: State<'_, AppState>) -> Result<Vec<B
 }
 
 #[tauri::command]
+async fn branch_diff(
+    branch: String,
+    base: String,
+    ignore_whitespace: bool,
+    state: State<'_, AppState>,
+) -> Result<BranchDiff, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.branch_diff(&branch, &base, ignore_whitespace)).await
+}
+
+#[tauri::command]
+async fn commit_diff(hash: String, ignore_whitespace: bool, state: State<'_, AppState>) -> Result<Vec<FileDiff>, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.commit_diff(&hash, ignore_whitespace)).await
+}
+
+#[tauri::command]
+async fn file_lines(rev: String, path: String, state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.file_lines(&rev, &path)).await
+}
+
+#[tauri::command]
+async fn conflicts(branch: String, base: String, state: State<'_, AppState>) -> Result<Vec<ConflictFile>, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.conflicts(&branch, &base)).await
+}
+
+#[tauri::command]
 fn recent_repos(app: AppHandle) -> Vec<String> {
     recent::list(&app)
 }
@@ -80,7 +109,17 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
-        .invoke_handler(tauri::generate_handler![open_repo, repo_info, list_branches, recent_repos, forget_repo])
+        .invoke_handler(tauri::generate_handler![
+            open_repo,
+            repo_info,
+            list_branches,
+            branch_diff,
+            commit_diff,
+            file_lines,
+            conflicts,
+            recent_repos,
+            forget_repo
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Musubiko");
 }

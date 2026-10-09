@@ -203,6 +203,26 @@ impl Repo {
         }
     }
 
+    /// Ref for a work branch: the local one when it exists, otherwise the remote-tracking one.
+    pub(crate) fn branch_ref(&self, name: &str, refs: &BTreeMap<String, Refs>) -> Option<String> {
+        let r = refs.get(name)?;
+        if r.local.is_some() {
+            return Some(format!("refs/heads/{name}"));
+        }
+        let remote = self.remote.as_deref()?;
+        r.remote.as_ref().map(|_| format!("refs/remotes/{remote}/{name}"))
+    }
+
+    /// The branch's ref, the base it is compared with (`base`, or the fixed one for hotfix
+    /// halves) and that base's ref.
+    pub(crate) fn resolve(&self, name: &str, base: &str) -> Result<(String, String, String)> {
+        let refs = self.refs()?;
+        let branch_ref = self.branch_ref(name, &refs).ok_or_else(|| Error::NoBranch(name.into()))?;
+        let target = self.flow.target_for(name, base).to_string();
+        let target_ref = self.base_ref(&target, &refs).ok_or_else(|| Error::NoBranch(target.clone()))?;
+        Ok((branch_ref, target, target_ref))
+    }
+
     /// Local branch against its remote copy: commits not pushed and not pulled.
     pub(crate) fn sync(&self, r: &Refs) -> Result<Option<Sync>> {
         let (Some(l), Some(rm)) = (&r.local, &r.remote) else { return Ok(None) };

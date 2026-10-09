@@ -8,6 +8,9 @@ pub enum Error {
     #[error("Не найден git версии {min} или новее. Найдены: {found}. Установите свежий git: brew install git", min = crate::git::fmt_version(crate::MIN_VERSION), found = if found.is_empty() { "ничего".to_string() } else { found.join(", ") })]
     GitNotFound { found: Vec<String> },
 
+    #[error("Нет ветки {0}")]
+    NoBranch(String),
+
     #[error("{0} — не git-репозиторий")]
     NotARepo(PathBuf),
 

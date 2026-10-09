@@ -18,6 +18,11 @@ Rust, приложение — на Tauri (веб-интерфейс внутр�
   Пара показывается рядом.
 - Фильтры (мои, не слиты, слиты, конфликт, старые, не запушены), поиск по `/`, обновление по
   ⌘R и при возвращении в окно.
+- Дифф ветки как в pull request — от точки, где она отошла от базы: дерево файлов, unified и
+  split, подсветка синтаксиса и изменённой части строки, разворот скрытых строк, «Просмотрено»,
+  скрытие пробельных изменений. Дифф отдельного коммита. Для веток с конфликтом — сами места
+  конфликта: что в базе и что в ветке. Клавиши: `j`/`k` — следующий/предыдущий файл, `v` —
+  просмотрено, Esc — назад.
 
 План — [docs/PLAN.md](docs/PLAN.md).
 
@@ -68,4 +73,6 @@ make icon     # перерисовать иконку из design/make-icon.swif
 make branches REPO=~/work/project            # ветки против develop (или master, если develop нет)
 make branches REPO=~/work/project BASE=master
 cargo run -p musubiko-cli -- info ~/work/project
+cargo run -p musubiko-cli -- diff feature/x ~/work/project        # файлы ветки и конфликты
+cargo run -p musubiko-cli -- conflicts feature/x ~/work/project   # где слияние даст конфликт
 ```

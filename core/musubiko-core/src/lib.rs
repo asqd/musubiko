@@ -4,12 +4,14 @@
 //! apply as they would in a terminal. Reads never take the index lock (`GIT_OPTIONAL_LOCKS=0`).
 
 mod branches;
+mod diff;
 mod error;
 mod flow;
 mod git;
 mod repo;
 
 pub use branches::{Branch, Location, Status, Sync};
+pub use diff::{BranchDiff, ConflictFile, ConflictRegion, FileChange, FileDiff, Hunk, Line, LineKind};
 pub use error::{Error, Result};
 pub use flow::Flow;
 pub use git::{Git, MIN_VERSION};
