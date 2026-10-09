@@ -168,6 +168,63 @@ export interface Operation {
   undoError: string | null;
 }
 
+export interface OpPlan {
+  title: string;
+  steps: Step[];
+  commands: string[];
+  problems: string[];
+  warnings: string[];
+}
+
+export interface PortInput {
+  commits: string[];
+  target: string;
+  create: boolean;
+  push: boolean;
+}
+
+export interface DeleteInput {
+  names: string[];
+  local: boolean;
+  remote: boolean;
+}
+
+export interface Ported {
+  hash: string;
+  short: string;
+  place: string;
+  byContent: boolean;
+}
+
+export interface PairCommit {
+  commit: Commit;
+  ported: Ported | null;
+}
+
+export type PairState = "empty" | "work" | "unsynced" | "noDev" | "lost" | "released" | "done";
+
+export interface HotfixPair {
+  slug: string;
+  masterBranch: string;
+  devBranch: string;
+  master: Branch | null;
+  dev: Branch | null;
+  commits: PairCommit[];
+  unsynced: number;
+  state: PairState;
+  note: string | null;
+}
+
+export interface Radar {
+  pairs: HotfixPair[];
+  lost: Commit[];
+  olderHidden: number;
+  developStaleDays: number | null;
+  recentDays: number;
+  master: string;
+  develop: string;
+}
+
 /** The command line a step runs, as shown to the user. */
 export function commandOf(step: Step): string {
   return ["git", ...step.args.map((a) => (/^[\w\-./:=@^~+,%]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`))].join(" ");
@@ -184,6 +241,11 @@ export const api = {
   conflicts: (branch: string, base: string) => invoke<ConflictFile[]>("conflicts", { branch, base }),
   planHotfix: (input: HotfixInput) => invoke<HotfixPlan>("plan_hotfix", { input }),
   startHotfix: (input: HotfixInput) => invoke<Operation>("start_hotfix", { input }),
+  radar: () => invoke<Radar>("hotfix_radar"),
+  planPort: (input: PortInput) => invoke<OpPlan>("plan_port", { input }),
+  startPort: (input: PortInput) => invoke<Operation>("start_port", { input }),
+  planDelete: (input: DeleteInput) => invoke<OpPlan>("plan_delete", { input }),
+  startDelete: (input: DeleteInput) => invoke<Operation>("start_delete", { input }),
   opStep: () => invoke<Operation>("op_step"),
   opRollback: () => invoke<Operation>("op_rollback"),
   opLeave: () => invoke<Operation>("op_leave"),

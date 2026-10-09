@@ -10,13 +10,19 @@ mod flow;
 mod git;
 mod hotfix;
 mod ops;
+mod port;
+mod radar;
 mod repo;
 
 pub use branches::{Branch, Location, Status, Sync};
-pub use diff::{BranchDiff, ConflictFile, ConflictRegion, FileChange, FileDiff, Hunk, Line, LineKind};
+pub use diff::{
+    BranchDiff, ConflictFile, ConflictRegion, FileChange, FileDiff, Hunk, Line, LineKind,
+};
 pub use error::{Error, Result};
 pub use flow::Flow;
 pub use git::{Git, MIN_VERSION};
-pub use hotfix::{slugify, After, HotfixInput, HotfixPlan};
+pub use hotfix::{After, HotfixInput, HotfixPlan, slugify};
 pub use ops::{Effect, Guard, OpStatus, Operation, Step, StepState};
+pub use port::{DeleteInput, OpPlan, PortInput};
+pub use radar::{HotfixPair, PairCommit, PairState, Ported, Radar};
 pub use repo::{BaseTip, Change, Commit, Person, Repo, RepoInfo};

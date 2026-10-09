@@ -4,6 +4,7 @@
 //! `musubiko conflicts BRANCH [PATH]` prints where merging into the base would conflict.
 //! `musubiko hotfix NAME [PATH] [--after worktree|switch|stay] [--no-push] [--run]` plans a hotfix
 //! pair and, with `--run`, creates it.
+//! `musubiko radar [PATH]` shows which hotfix commits are not on the develop side.
 //! `--json` prints exactly what the app receives.
 
 use std::path::PathBuf;
@@ -180,7 +181,35 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 return Err("остановился; сделанное не откатывал".into());
             }
         }
-        other => return Err(format!("неизвестная команда {other}; есть branches, diff, conflicts, hotfix и info").into()),
+        "radar" => {
+            let started = Instant::now();
+            let r = repo.hotfix_radar()?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&r)?);
+                return Ok(());
+            }
+            for p in &r.pairs {
+                println!("{:<10?} {}  ({} коммитов, не перенесено {})", p.state, p.master_branch, p.commits.len(), p.unsynced);
+                for c in &p.commits {
+                    let to = c.ported.as_ref().map(|x| format!("→ {} в {}", x.short, x.place)).unwrap_or_else(|| "✗ не перенесён".into());
+                    println!("    {} {:<50} {to}", c.commit.short, c.commit.subject);
+                }
+                if let Some(n) = &p.note {
+                    println!("    ({n})");
+                }
+            }
+            if let Some(d) = r.develop_stale_days {
+                println!("{} отстаёт от {} на {d} дней: похоже, репозиторий живёт без {}", r.develop, r.master, r.develop);
+            }
+            if !r.lost.is_empty() {
+                println!("В {}, но не в {} (за {} дней):", r.master, r.develop, r.recent_days);
+                for c in &r.lost {
+                    println!("    {} {} — {}", c.short, c.subject, c.author.name);
+                }
+            }
+            eprintln!("{} пар, старых скрыто {}, за {:.1?}", r.pairs.len(), r.older_hidden, started.elapsed());
+        }
+        other => return Err(format!("неизвестная команда {other}; есть branches, diff, conflicts, hotfix, radar и info").into()),
     }
     Ok(())
 }

@@ -30,7 +30,10 @@ impl Git {
             .iter()
             .filter(|(_, v)| *v >= MIN_VERSION)
             .max_by_key(|(_, v)| *v)
-            .map(|(bin, version)| Git { bin: bin.clone(), version: *version })
+            .map(|(bin, version)| Git {
+                bin: bin.clone(),
+                version: *version,
+            })
             .ok_or_else(|| Error::GitNotFound {
                 found: found
                     .iter()
@@ -62,6 +65,50 @@ impl Git {
         Ok(self.command(dir, args).output()?)
     }
 
+    /// Runs git with `input` on stdin and returns stdout (`git patch-id` reads a patch this way).
+    pub(crate) fn run_with_stdin(
+        &self,
+        dir: &Path,
+        args: &[&str],
+        input: Vec<u8>,
+    ) -> Result<String> {
+        let out = self.output_with(dir, args, &[], input)?;
+        if !out.status.success() {
+            return Err(Error::Command {
+                args: args.join(" "),
+                stderr: String::from_utf8_lossy(&out.stderr).trim().to_string(),
+            });
+        }
+        Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+    }
+
+    /// Runs git with extra environment and `input` on stdin; returns the raw output.
+    pub(crate) fn output_with(
+        &self,
+        dir: &Path,
+        args: &[&str],
+        env: &[(&str, &Path)],
+        input: Vec<u8>,
+    ) -> Result<Output> {
+        use std::io::Write;
+        use std::process::Stdio;
+        let mut cmd = self.command(dir, args);
+        for (k, v) in env {
+            cmd.env(k, v);
+        }
+        let mut child = cmd
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let mut stdin = child.stdin.take().expect("piped stdin");
+        // Write from another thread: a large patch would otherwise fill the pipe and deadlock.
+        let writer = std::thread::spawn(move || stdin.write_all(&input));
+        let out = child.wait_with_output()?;
+        let _ = writer.join();
+        Ok(out)
+    }
+
     /// Runs git and returns stdout; a non-zero exit becomes [`Error::Command`].
     pub(crate) fn run(&self, dir: &Path, args: &[&str]) -> Result<String> {
         let out = self.output(dir, args)?;
@@ -83,20 +130,32 @@ fn candidates() -> Vec<PathBuf> {
     if let Some(path) = std::env::var_os("PATH") {
         list.extend(std::env::split_paths(&path).map(|d| d.join("git")));
     }
-    for p in ["/opt/homebrew/bin/git", "/usr/local/bin/git", "/usr/bin/git"] {
+    for p in [
+        "/opt/homebrew/bin/git",
+        "/usr/local/bin/git",
+        "/usr/bin/git",
+    ] {
         list.push(PathBuf::from(p));
     }
     list.into_iter().filter(|p| p.is_file()).collect()
 }
 
 fn version_of(bin: &Path) -> Option<(u32, u32, u32)> {
-    let out = Command::new(bin).arg("--version").env("LC_ALL", "C").output().ok()?;
+    let out = Command::new(bin)
+        .arg("--version")
+        .env("LC_ALL", "C")
+        .output()
+        .ok()?;
     parse_version(&String::from_utf8_lossy(&out.stdout))
 }
 
 /// Parses `git version 2.39.5 (Apple Git-154)` and `git version 2.47.0.windows.1`.
 pub(crate) fn parse_version(s: &str) -> Option<(u32, u32, u32)> {
-    let v = s.trim().strip_prefix("git version ")?.split_whitespace().next()?;
+    let v = s
+        .trim()
+        .strip_prefix("git version ")?
+        .split_whitespace()
+        .next()?;
     let mut it = v.split('.').map(|p| p.parse::<u32>().ok());
     Some((it.next()??, it.next()??, it.next().flatten().unwrap_or(0)))
 }
@@ -111,8 +170,14 @@ mod tests {
 
     #[test]
     fn parses_versions() {
-        assert_eq!(parse_version("git version 2.39.5 (Apple Git-154)\n"), Some((2, 39, 5)));
-        assert_eq!(parse_version("git version 2.47.0.windows.1"), Some((2, 47, 0)));
+        assert_eq!(
+            parse_version("git version 2.39.5 (Apple Git-154)\n"),
+            Some((2, 39, 5))
+        );
+        assert_eq!(
+            parse_version("git version 2.47.0.windows.1"),
+            Some((2, 47, 0))
+        );
         assert_eq!(parse_version("git version 2.40"), Some((2, 40, 0)));
         assert_eq!(parse_version("nope"), None);
     }

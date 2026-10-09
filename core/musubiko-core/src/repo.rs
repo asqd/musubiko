@@ -84,13 +84,22 @@ impl Repo {
             _ => return Err(Error::NotARepo(path.to_path_buf())),
         };
         let remotes = git.run(&root, &["remote"])?;
-        let remotes: Vec<&str> = remotes.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
+        let remotes: Vec<&str> = remotes
+            .lines()
+            .map(str::trim)
+            .filter(|l| !l.is_empty())
+            .collect();
         let remote = remotes
             .iter()
             .find(|r| **r == "origin")
             .or(remotes.first())
             .map(|r| r.to_string());
-        let mut repo = Repo { git, root, remote, flow: Flow::default() };
+        let mut repo = Repo {
+            git,
+            root,
+            remote,
+            flow: Flow::default(),
+        };
         let refs = repo.refs()?;
         if !refs.contains_key(&repo.flow.master) && refs.contains_key("main") {
             repo.flow.master = "main".into();
@@ -109,7 +118,11 @@ impl Repo {
     /// develop when the repository has it, otherwise master.
     pub fn default_base(&self) -> Result<String> {
         let refs = self.refs()?;
-        Ok(if refs.contains_key(&self.flow.develop) { self.flow.develop.clone() } else { self.flow.master.clone() })
+        Ok(if refs.contains_key(&self.flow.develop) {
+            self.flow.develop.clone()
+        } else {
+            self.flow.master.clone()
+        })
     }
 
     pub(crate) fn run(&self, args: &[&str]) -> Result<String> {
@@ -117,7 +130,9 @@ impl Repo {
     }
 
     pub fn info(&self) -> Result<RepoInfo> {
-        let head_out = self.git.output(&self.root, &["symbolic-ref", "--short", "-q", "HEAD"])?;
+        let head_out = self
+            .git
+            .output(&self.root, &["symbolic-ref", "--short", "-q", "HEAD"])?;
         let head = head_out
             .status
             .success()
@@ -126,28 +141,56 @@ impl Repo {
             .run(&["rev-parse", "--short", "HEAD"])
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
-        let mut changes = parse_status(&self.run(&["status", "--porcelain=v1", "-z", "--untracked-files=normal"])?);
+        let mut changes = parse_status(&self.run(&[
+            "status",
+            "--porcelain=v1",
+            "-z",
+            "--untracked-files=normal",
+        ])?);
         changes.sort_by(|a, b| a.path.cmp(&b.path));
-        let config = |key: &str| self.run(&["config", key]).map(|s| s.trim().to_string()).unwrap_or_default();
-        let user = Person { name: config("user.name"), email: config("user.email") };
+        let config = |key: &str| {
+            self.run(&["config", key])
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default()
+        };
+        let user = Person {
+            name: config("user.name"),
+            email: config("user.email"),
+        };
 
         let refs = self.refs()?;
         let mut bases = Vec::new();
-        for (role, name) in [("master", &self.flow.master), ("develop", &self.flow.develop)] {
+        for (role, name) in [
+            ("master", &self.flow.master),
+            ("develop", &self.flow.develop),
+        ] {
             let Some(r) = refs.get(name) else { continue };
-            let Some(ref_name) = self.base_ref(name, &refs) else { continue };
-            let tip = r.remote.clone().or_else(|| r.local.clone()).expect("ref without commit");
+            let Some(ref_name) = self.base_ref(name, &refs) else {
+                continue;
+            };
+            let tip = r
+                .remote
+                .clone()
+                .or_else(|| r.local.clone())
+                .expect("ref without commit");
             let sync = self.sync(r)?;
             bases.push(BaseTip {
                 role: role.into(),
                 name: name.clone(),
-                ref_name: ref_name.trim_start_matches("refs/remotes/").trim_start_matches("refs/heads/").into(),
+                ref_name: ref_name
+                    .trim_start_matches("refs/remotes/")
+                    .trim_start_matches("refs/heads/")
+                    .into(),
                 tip,
                 sync,
             });
         }
         Ok(RepoInfo {
-            name: self.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+            name: self
+                .root
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
             root: self.root.clone(),
             head,
             head_short,
@@ -179,7 +222,10 @@ impl Repo {
                 hash: f[1].into(),
                 short: f[2].into(),
                 subject: f[3].into(),
-                author: Person { name: f[4].into(), email: f[5].into() },
+                author: Person {
+                    name: f[4].into(),
+                    email: f[5].into(),
+                },
                 date: f[6].parse().unwrap_or(0),
             };
             if let Some(name) = f[0].strip_prefix("refs/heads/") {
@@ -210,22 +256,30 @@ impl Repo {
             return Some(format!("refs/heads/{name}"));
         }
         let remote = self.remote.as_deref()?;
-        r.remote.as_ref().map(|_| format!("refs/remotes/{remote}/{name}"))
+        r.remote
+            .as_ref()
+            .map(|_| format!("refs/remotes/{remote}/{name}"))
     }
 
     /// The branch's ref, the base it is compared with (`base`, or the fixed one for hotfix
     /// halves) and that base's ref.
     pub(crate) fn resolve(&self, name: &str, base: &str) -> Result<(String, String, String)> {
         let refs = self.refs()?;
-        let branch_ref = self.branch_ref(name, &refs).ok_or_else(|| Error::NoBranch(name.into()))?;
+        let branch_ref = self
+            .branch_ref(name, &refs)
+            .ok_or_else(|| Error::NoBranch(name.into()))?;
         let target = self.flow.target_for(name, base).to_string();
-        let target_ref = self.base_ref(&target, &refs).ok_or_else(|| Error::NoBranch(target.clone()))?;
+        let target_ref = self
+            .base_ref(&target, &refs)
+            .ok_or_else(|| Error::NoBranch(target.clone()))?;
         Ok((branch_ref, target, target_ref))
     }
 
     /// Local branch against its remote copy: commits not pushed and not pulled.
     pub(crate) fn sync(&self, r: &Refs) -> Result<Option<Sync>> {
-        let (Some(l), Some(rm)) = (&r.local, &r.remote) else { return Ok(None) };
+        let (Some(l), Some(rm)) = (&r.local, &r.remote) else {
+            return Ok(None);
+        };
         if l.hash == rm.hash {
             return Ok(None);
         }
@@ -236,7 +290,9 @@ impl Repo {
     /// Commits only in `a` and only in `b`.
     pub(crate) fn left_right(&self, a: &str, b: &str) -> Result<(u32, u32)> {
         let out = self.run(&["rev-list", "--left-right", "--count", &format!("{a}...{b}")])?;
-        let mut it = out.split_whitespace().map(|n| n.parse::<u32>().unwrap_or(0));
+        let mut it = out
+            .split_whitespace()
+            .map(|n| n.parse::<u32>().unwrap_or(0));
         Ok((it.next().unwrap_or(0), it.next().unwrap_or(0)))
     }
 }
@@ -254,7 +310,10 @@ pub(crate) fn parse_status(out: &str) -> Vec<Change> {
         if xy.contains('R') || xy.contains('C') {
             entries.next();
         }
-        changes.push(Change { code: xy.trim().to_string(), path: path.to_string() });
+        changes.push(Change {
+            code: xy.trim().to_string(),
+            path: path.to_string(),
+        });
     }
     changes
 }
@@ -267,7 +326,18 @@ mod tests {
     fn parses_porcelain_status() {
         let out = " M app/a.rb\0?? notes/plan.md\0R  new.rb\0old.rb\0MM both.rb\0";
         let got = parse_status(out);
-        let codes: Vec<(&str, &str)> = got.iter().map(|c| (c.code.as_str(), c.path.as_str())).collect();
-        assert_eq!(codes, [("M", "app/a.rb"), ("??", "notes/plan.md"), ("R", "new.rb"), ("MM", "both.rb")]);
+        let codes: Vec<(&str, &str)> = got
+            .iter()
+            .map(|c| (c.code.as_str(), c.path.as_str()))
+            .collect();
+        assert_eq!(
+            codes,
+            [
+                ("M", "app/a.rb"),
+                ("??", "notes/plan.md"),
+                ("R", "new.rb"),
+                ("MM", "both.rb")
+            ]
+        );
     }
 }

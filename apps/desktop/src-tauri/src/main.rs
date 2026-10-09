@@ -9,7 +9,10 @@ mod recent;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use musubiko_core::{Branch, BranchDiff, ConflictFile, FileDiff, Git, HotfixInput, HotfixPlan, OpStatus, Operation, Repo, RepoInfo};
+use musubiko_core::{
+    Branch, BranchDiff, ConflictFile, DeleteInput, FileDiff, Git, HotfixInput, HotfixPlan, OpPlan, OpStatus, Operation, PortInput,
+    Radar, Repo, RepoInfo,
+};
 use tauri::{AppHandle, State};
 
 #[derive(Default)]
@@ -104,16 +107,53 @@ async fn plan_hotfix(input: HotfixInput, state: State<'_, AppState>) -> Result<H
     blocking(move || repo.plan_hotfix(&input)).await
 }
 
-#[tauri::command]
-async fn start_hotfix(input: HotfixInput, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+/// Builds an operation with `f` and makes it the current one; steps run through `op_step`.
+async fn start_op(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    f: impl FnOnce(&Repo) -> musubiko_core::Result<Operation> + Send + 'static,
+) -> Result<Operation, String> {
     if state.op.lock().unwrap().as_ref().is_some_and(|o| matches!(o.status, OpStatus::Running | OpStatus::Failed)) {
         return Err("Уже идёт другая операция".into());
     }
     let repo = state.repo()?;
-    let op = blocking(move || repo.start_hotfix(&input)).await?;
-    journal::upsert(&app, &op);
+    let op = blocking(move || f(&repo)).await?;
+    journal::upsert(app, &op);
     *state.op.lock().unwrap() = Some(op.clone());
     Ok(op)
+}
+
+#[tauri::command]
+async fn start_hotfix(input: HotfixInput, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+    start_op(&app, &state, move |repo| repo.start_hotfix(&input)).await
+}
+
+#[tauri::command]
+async fn hotfix_radar(state: State<'_, AppState>) -> Result<Radar, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.hotfix_radar()).await
+}
+
+#[tauri::command]
+async fn plan_port(input: PortInput, state: State<'_, AppState>) -> Result<OpPlan, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.plan_port(&input)).await
+}
+
+#[tauri::command]
+async fn start_port(input: PortInput, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+    start_op(&app, &state, move |repo| repo.start_port(&input)).await
+}
+
+#[tauri::command]
+async fn plan_delete(input: DeleteInput, state: State<'_, AppState>) -> Result<OpPlan, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.plan_delete(&input)).await
+}
+
+#[tauri::command]
+async fn start_delete(input: DeleteInput, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+    start_op(&app, &state, move |repo| repo.start_delete(&input)).await
 }
 
 /// Applies `f` to the current operation off the main thread and records the result.
@@ -209,6 +249,11 @@ fn main() {
             conflicts,
             plan_hotfix,
             start_hotfix,
+            hotfix_radar,
+            plan_port,
+            start_port,
+            plan_delete,
+            start_delete,
             op_step,
             op_rollback,
             op_leave,

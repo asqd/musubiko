@@ -29,6 +29,11 @@ Rust, приложение — на Tauri (веб-интерфейс внутр�
   по умолчанию открывает hotfix в соседней папке (worktree), можно вместо этого убрать
   изменения в stash и переключиться. Перед запуском видны точные команды; на ошибке можно
   повторить шаг, откатить или оставить как есть.
+- Радар хотфиксов: по каждой паре видно, какие коммиты master-части уже есть на стороне
+  develop (найденные по patch-id, то есть и после cherry-pick, или по содержимому — после
+  squash), а какие нет. Отдельная тревога — коммиты, которые есть в master и нет в develop.
+  Недостающее переносится кнопкой: cherry-pick во временной папке, при необходимости с созданием
+  `-dev` ветки. Завершённые пары можно удалить.
 - Журнал: всё, что приложение делало с репозиторием, с командами и отменой.
 
 ## Как устроены операции
@@ -93,4 +98,5 @@ cargo run -p musubiko-cli -- diff feature/x ~/work/project        # файлы �
 cargo run -p musubiko-cli -- conflicts feature/x ~/work/project   # где слияние даст конфликт
 cargo run -p musubiko-cli -- hotfix "LT-1 fix" ~/work/project --after worktree        # план
 cargo run -p musubiko-cli -- hotfix "LT-1 fix" ~/work/project --after worktree --run  # выполнить
+cargo run -p musubiko-cli -- radar ~/work/project                     # радар хотфиксов
 ```

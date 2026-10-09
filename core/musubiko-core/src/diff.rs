@@ -102,10 +102,17 @@ pub struct ConflictRegion {
 
 impl Repo {
     /// The branch's own changes: from its merge base with the target to its tip.
-    pub fn branch_diff(&self, name: &str, base: &str, ignore_whitespace: bool) -> Result<BranchDiff> {
+    pub fn branch_diff(
+        &self,
+        name: &str,
+        base: &str,
+        ignore_whitespace: bool,
+    ) -> Result<BranchDiff> {
         let (branch_ref, target, target_ref) = self.resolve(name, base)?;
         let tip = self.run(&["rev-parse", &branch_ref])?.trim().to_string();
-        let mb = self.git.output(&self.root, &["merge-base", &target_ref, &tip])?;
+        let mb = self
+            .git
+            .output(&self.root, &["merge-base", &target_ref, &tip])?;
         if !mb.status.success() {
             return Err(Error::Command {
                 args: format!("merge-base {target} {name}"),
@@ -119,24 +126,41 @@ impl Repo {
             .ok_or_else(|| Error::NoBranch(mb.clone()))?;
         let commits = self.log(&["--reverse", &format!("{target_ref}..{tip}")])?;
         let files = parse_patch(&self.diff_text(&mb, &tip, ignore_whitespace)?);
-        Ok(BranchDiff { branch: name.into(), target, merge_base, tip, commits, files })
+        Ok(BranchDiff {
+            branch: name.into(),
+            target,
+            merge_base,
+            tip,
+            commits,
+            files,
+        })
     }
 
     /// One commit against its first parent.
     pub fn commit_diff(&self, hash: &str, ignore_whitespace: bool) -> Result<Vec<FileDiff>> {
-        let parent = self.git.output(&self.root, &["rev-parse", "--verify", "-q", &format!("{hash}^")])?;
+        let parent = self.git.output(
+            &self.root,
+            &["rev-parse", "--verify", "-q", &format!("{hash}^")],
+        )?;
         let parent = if parent.status.success() {
             String::from_utf8_lossy(&parent.stdout).trim().to_string()
         } else {
             EMPTY_TREE.to_string()
         };
-        Ok(parse_patch(&self.diff_text(&parent, hash, ignore_whitespace)?))
+        Ok(parse_patch(&self.diff_text(
+            &parent,
+            hash,
+            ignore_whitespace,
+        )?))
     }
 
     /// Lines of a file at a revision, for showing the context hidden between hunks.
     pub fn file_lines(&self, rev: &str, path: &str) -> Result<Vec<String>> {
         let text = self.run(&["cat-file", "blob", &format!("{rev}:{path}")])?;
-        let mut lines: Vec<String> = text.split('\n').map(|l| l.strip_suffix('\r').unwrap_or(l).to_string()).collect();
+        let mut lines: Vec<String> = text
+            .split('\n')
+            .map(|l| l.strip_suffix('\r').unwrap_or(l).to_string())
+            .collect();
         if lines.last().is_some_and(|l| l.is_empty()) {
             lines.pop();
         }
@@ -203,7 +227,7 @@ impl Repo {
         self.run(&args)
     }
 
-    fn log(&self, args: &[&str]) -> Result<Vec<Commit>> {
+    pub(crate) fn log(&self, args: &[&str]) -> Result<Vec<Commit>> {
         let mut all = vec!["log", "--format=%H%x00%h%x00%s%x00%an%x00%ae%x00%ct"];
         all.extend_from_slice(args);
         Ok(self
@@ -215,7 +239,10 @@ impl Repo {
                     hash: f[0].into(),
                     short: f[1].into(),
                     subject: f[2].into(),
-                    author: Person { name: f[3].into(), email: f[4].into() },
+                    author: Person {
+                        name: f[3].into(),
+                        email: f[4].into(),
+                    },
                     date: f[5].parse().unwrap_or(0),
                 })
             })
@@ -261,7 +288,10 @@ pub(crate) fn parse_patch(text: &str) -> Vec<FileDiff> {
             }
             stored += 1;
             if let Some(h) = f.hunks.last_mut() {
-                h.lines.push(Line { kind, text: body.strip_suffix('\r').unwrap_or(body).to_string() });
+                h.lines.push(Line {
+                    kind,
+                    text: body.strip_suffix('\r').unwrap_or(body).to_string(),
+                });
             }
             continue;
         }
@@ -310,7 +340,10 @@ pub(crate) fn parse_patch(text: &str) -> Vec<FileDiff> {
         } else if let Some(m) = line.strip_prefix("old mode ") {
             f.mode_change = Some(m.to_string());
         } else if let Some(m) = line.strip_prefix("new mode ") {
-            f.mode_change = Some(format!("{} → {m}", f.mode_change.take().unwrap_or_default()));
+            f.mode_change = Some(format!(
+                "{} → {m}",
+                f.mode_change.take().unwrap_or_default()
+            ));
         } else if let Some(p) = line.strip_prefix("--- ") {
             if let Some(p) = strip_side(p, "a/") {
                 f.old_path = Some(p);
@@ -343,7 +376,11 @@ fn parse_header_paths(rest: &str) -> (String, String) {
     if rest.starts_with('"') {
         let (a, tail) = split_quoted(rest);
         let b = tail.trim_start();
-        let b = if b.starts_with('"') { split_quoted(b).0 } else { b.to_string() };
+        let b = if b.starts_with('"') {
+            split_quoted(b).0
+        } else {
+            b.to_string()
+        };
         return (strip_prefix_owned(a, "a/"), strip_prefix_owned(b, "b/"));
     }
     // Same path on both sides: "a/" + p + " b/" + p.
@@ -378,7 +415,11 @@ fn strip_side(p: &str, prefix: &str) -> Option<String> {
 
 /// Undoes git's C-style quoting of unusual paths: `"tab\there"`, `"\320\277"`.
 fn unquote(s: &str) -> String {
-    if s.starts_with('"') { split_quoted(s).0 } else { s.to_string() }
+    if s.starts_with('"') {
+        split_quoted(s).0
+    } else {
+        s.to_string()
+    }
 }
 
 /// Reads one quoted string at the start of `s`; returns it and the rest after the closing quote.
@@ -420,7 +461,14 @@ fn parse_hunk_header(h: &str) -> Option<Hunk> {
     };
     let (old_start, old_lines) = range(it.next()?.strip_prefix('-')?)?;
     let (new_start, new_lines) = range(it.next()?.strip_prefix('+')?)?;
-    Some(Hunk { old_start, old_lines, new_start, new_lines, section: section.trim().to_string(), lines: Vec::new() })
+    Some(Hunk {
+        old_start,
+        old_lines,
+        new_start,
+        new_lines,
+        section: section.trim().to_string(),
+        lines: Vec::new(),
+    })
 }
 
 /// Finds `<<<<<<<` … `=======` … `>>>>>>>` regions (a `|||||||` base section is skipped).
@@ -460,7 +508,13 @@ pub(crate) fn parse_conflicts(content: &str) -> Vec<ConflictRegion> {
             .take_while(|l| !l.starts_with("<<<<<<<"))
             .map(|s| s.to_string())
             .collect();
-        regions.push(ConflictRegion { line: start as u32 + 1, before, base, branch, after });
+        regions.push(ConflictRegion {
+            line: start as u32 + 1,
+            before,
+            base,
+            branch,
+            after,
+        });
         last_end = end + 1;
         i = end + 1;
     }
@@ -513,13 +567,29 @@ diff --git \"a/\\321\\204\\320\\260\\320\\271\\320\\273.txt\" \"b/\\321\\204\\32
         let files = parse_patch(PATCH);
         let summary: Vec<(&str, Option<&str>, FileChange, bool, u32, u32)> = files
             .iter()
-            .map(|f| (f.path.as_str(), f.old_path.as_deref(), f.change, f.binary, f.additions, f.deletions))
+            .map(|f| {
+                (
+                    f.path.as_str(),
+                    f.old_path.as_deref(),
+                    f.change,
+                    f.binary,
+                    f.additions,
+                    f.deletions,
+                )
+            })
             .collect();
         assert_eq!(
             summary,
             [
                 ("app/price.rb", None, FileChange::Modified, false, 2, 1),
-                ("new name.txt", Some("old name.txt"), FileChange::Renamed, false, 0, 0),
+                (
+                    "new name.txt",
+                    Some("old name.txt"),
+                    FileChange::Renamed,
+                    false,
+                    0,
+                    0
+                ),
                 ("img.png", None, FileChange::Added, true, 0, 0),
                 ("run.sh", None, FileChange::Modified, false, 0, 0),
                 ("gone.rb", None, FileChange::Deleted, false, 0, 1),
@@ -527,14 +597,34 @@ diff --git \"a/\\321\\204\\320\\260\\320\\271\\320\\273.txt\" \"b/\\321\\204\\32
             ]
         );
         let h = &files[0].hunks[0];
-        assert_eq!((h.old_start, h.old_lines, h.new_start, h.new_lines, h.section.as_str()), (1, 3, 1, 4, "class Price"));
-        let kinds: Vec<(LineKind, &str)> = h.lines.iter().map(|l| (l.kind, l.text.as_str())).collect();
+        assert_eq!(
+            (
+                h.old_start,
+                h.old_lines,
+                h.new_start,
+                h.new_lines,
+                h.section.as_str()
+            ),
+            (1, 3, 1, 4, "class Price")
+        );
+        let kinds: Vec<(LineKind, &str)> =
+            h.lines.iter().map(|l| (l.kind, l.text.as_str())).collect();
         assert_eq!(
             kinds,
-            [(LineKind::Context, "a"), (LineKind::Del, "b"), (LineKind::Add, "B"), (LineKind::Add, "c"), (LineKind::Context, "d")]
+            [
+                (LineKind::Context, "a"),
+                (LineKind::Del, "b"),
+                (LineKind::Add, "B"),
+                (LineKind::Add, "c"),
+                (LineKind::Context, "d")
+            ]
         );
         assert_eq!(files[3].mode_change.as_deref(), Some("100644 → 100755"));
-        assert_eq!(files[4].hunks[0].lines.len(), 1, "the no-newline marker is not a line");
+        assert_eq!(
+            files[4].hunks[0].lines.len(),
+            1,
+            "the no-newline marker is not a line"
+        );
     }
 
     #[test]
@@ -562,6 +652,9 @@ diff --git \"a/\\321\\204\\320\\260\\320\\271\\320\\273.txt\" \"b/\\321\\204\\32
     fn skips_the_ancestor_section_of_diff3_markers() {
         let content = "<<<<<<< ours\na\n||||||| base\nold\n=======\nb\n>>>>>>> theirs\n";
         let r = parse_conflicts(content);
-        assert_eq!((r[0].base.as_slice(), r[0].branch.as_slice()), (&["a".to_string()][..], &["b".to_string()][..]));
+        assert_eq!(
+            (r[0].base.as_slice(), r[0].branch.as_slice()),
+            (&["a".to_string()][..], &["b".to_string()][..])
+        );
     }
 }

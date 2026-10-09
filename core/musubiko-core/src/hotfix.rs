@@ -67,7 +67,10 @@ impl Repo {
         let from = |name: &str| -> Option<String> {
             match &remote {
                 Some(rm) if on_remote(name) => Some(format!("{rm}/{name}")),
-                _ => refs.get(name).and_then(|r| r.local.as_ref()).map(|_| name.to_string()),
+                _ => refs
+                    .get(name)
+                    .and_then(|r| r.local.as_ref())
+                    .map(|_| name.to_string()),
             }
         };
         let master_from = from(&flow.master);
@@ -83,33 +86,63 @@ impl Repo {
 
         let mut steps = Vec::new();
         if let Some(rm) = &remote {
-            let fetch: Vec<&str> = [flow.master.as_str(), flow.develop.as_str()].into_iter().filter(|b| on_remote(b)).collect();
+            let fetch: Vec<&str> = [flow.master.as_str(), flow.develop.as_str()]
+                .into_iter()
+                .filter(|b| on_remote(b))
+                .collect();
             if !fetch.is_empty() {
                 let mut args = vec!["fetch", rm.as_str()];
                 args.extend(fetch);
-                steps.push(Step::new(format!("Получить свежие {} и {}", flow.master, flow.develop), &args));
+                steps.push(Step::new(
+                    format!("Получить свежие {} и {}", flow.master, flow.develop),
+                    &args,
+                ));
             }
             steps.push(Step {
-                fail_if_output: Some(format!("{master_branch} или {dev_branch} уже есть на {rm}: выберите другое название")),
+                fail_if_output: Some(format!(
+                    "{master_branch} или {dev_branch} уже есть на {rm}: выберите другое название"
+                )),
                 ..Step::new(
                     format!("Проверить, что названия свободны на {rm}"),
-                    &["ls-remote", "--heads", rm, &format!("refs/heads/{master_branch}"), &format!("refs/heads/{dev_branch}")],
+                    &[
+                        "ls-remote",
+                        "--heads",
+                        rm,
+                        &format!("refs/heads/{master_branch}"),
+                        &format!("refs/heads/{dev_branch}"),
+                    ],
                 )
             });
         }
         steps.push(
-            Step::new(format!("Создать {master_branch} от {master_from}"), &["branch", "--no-track", &master_branch, &master_from])
-                .with_effect(Effect::Branch { name: master_branch.clone() }),
+            Step::new(
+                format!("Создать {master_branch} от {master_from}"),
+                &["branch", "--no-track", &master_branch, &master_from],
+            )
+            .with_effect(Effect::Branch {
+                name: master_branch.clone(),
+            }),
         );
         steps.push(
-            Step::new(format!("Создать {dev_branch} от {dev_from}"), &["branch", "--no-track", &dev_branch, &dev_from])
-                .with_effect(Effect::Branch { name: dev_branch.clone() }),
+            Step::new(
+                format!("Создать {dev_branch} от {dev_from}"),
+                &["branch", "--no-track", &dev_branch, &dev_from],
+            )
+            .with_effect(Effect::Branch {
+                name: dev_branch.clone(),
+            }),
         );
         let can_push = remote.is_some();
         if let (true, Some(rm)) = (input.push, &remote) {
             steps.push(
-                Step::new(format!("Запушить обе ветки на {rm}"), &["push", "-u", rm, &master_branch, &dev_branch])
-                    .with_effect(Effect::Push { remote: rm.clone(), names: vec![master_branch.clone(), dev_branch.clone()] }),
+                Step::new(
+                    format!("Запушить обе ветки на {rm}"),
+                    &["push", "-u", rm, &master_branch, &dev_branch],
+                )
+                .with_effect(Effect::Push {
+                    remote: rm.clone(),
+                    names: vec![master_branch.clone(), dev_branch.clone()],
+                }),
             );
         }
 
@@ -123,8 +156,11 @@ impl Repo {
                 }
                 let p = path.to_string_lossy().into_owned();
                 steps.push(
-                    Step::new(format!("Открыть {master_branch} в отдельной папке"), &["worktree", "add", &p, &master_branch])
-                        .with_effect(Effect::Worktree { path: p.clone() }),
+                    Step::new(
+                        format!("Открыть {master_branch} в отдельной папке"),
+                        &["worktree", "add", &p, &master_branch],
+                    )
+                    .with_effect(Effect::Worktree { path: p.clone() }),
                 );
                 worktree_path = Some(p);
             }
@@ -135,7 +171,13 @@ impl Repo {
                     steps.push(
                         Step::new(
                             format!("Убрать {} изменений в stash", info.changes.len()),
-                            &["stash", "push", "-u", "-m", &format!("musubiko: {from} перед {master_branch}")],
+                            &[
+                                "stash",
+                                "push",
+                                "-u",
+                                "-m",
+                                &format!("musubiko: {from} перед {master_branch}"),
+                            ],
                         )
                         .with_effect(Effect::Stash),
                     );
@@ -145,8 +187,11 @@ impl Repo {
                     None => (self.run(&["rev-parse", "HEAD"])?.trim().to_string(), true),
                 };
                 steps.push(
-                    Step::new(format!("Переключиться на {master_branch}"), &["switch", &master_branch])
-                        .with_effect(Effect::Switch { from, detached }),
+                    Step::new(
+                        format!("Переключиться на {master_branch}"),
+                        &["switch", &master_branch],
+                    )
+                    .with_effect(Effect::Switch { from, detached }),
                 );
             }
         }
@@ -171,12 +216,20 @@ impl Repo {
         if let Some(p) = plan.problems.first() {
             return Err(Error::Refused(p.clone()));
         }
-        Ok(Operation::new(format!("Новый hotfix {}", plan.slug), self, plan.steps))
+        Ok(Operation::new(
+            format!("Новый hotfix {}", plan.slug),
+            self,
+            plan.steps,
+        ))
     }
 
     /// `~/work/booking-api` → `~/work/booking-api@LT-4900-voucher`.
     fn worktree_path(&self, slug: &str) -> PathBuf {
-        let name = self.root.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "repo".into());
+        let name = self
+            .root
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "repo".into());
         self.root.with_file_name(format!("{name}@{slug}"))
     }
 }
@@ -190,7 +243,9 @@ pub fn slugify(raw: &str, prefix: &str, dev_suffix: &str) -> String {
         .find(|c: char| !(c.is_ascii_alphabetic()))
         .filter(|&i| i > 0 && s[i..].starts_with('-'))
         .and_then(|i| {
-            let digits = s[i + 1..].find(|c: char| !c.is_ascii_digit()).unwrap_or(s.len() - i - 1);
+            let digits = s[i + 1..]
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(s.len() - i - 1);
             (digits > 0).then_some(i + 1 + digits)
         });
     let (ticket, rest) = match ticket_len {
@@ -226,10 +281,35 @@ pub fn slugify(raw: &str, prefix: &str, dev_suffix: &str) -> String {
 
 fn translit(c: char) -> Option<&'static str> {
     Some(match c {
-        'а' => "a", 'б' => "b", 'в' => "v", 'г' => "g", 'д' => "d", 'е' | 'ё' | 'э' => "e", 'ж' => "zh",
-        'з' => "z", 'и' => "i", 'й' | 'ы' => "y", 'к' => "k", 'л' => "l", 'м' => "m", 'н' => "n",
-        'о' => "o", 'п' => "p", 'р' => "r", 'с' => "s", 'т' => "t", 'у' => "u", 'ф' => "f", 'х' => "h",
-        'ц' => "ts", 'ч' => "ch", 'ш' => "sh", 'щ' => "sch", 'ъ' | 'ь' => "", 'ю' => "yu", 'я' => "ya",
+        'а' => "a",
+        'б' => "b",
+        'в' => "v",
+        'г' => "g",
+        'д' => "d",
+        'е' | 'ё' | 'э' => "e",
+        'ж' => "zh",
+        'з' => "z",
+        'и' => "i",
+        'й' | 'ы' => "y",
+        'к' => "k",
+        'л' => "l",
+        'м' => "m",
+        'н' => "n",
+        'о' => "o",
+        'п' => "p",
+        'р' => "r",
+        'с' => "s",
+        'т' => "t",
+        'у' => "u",
+        'ф' => "f",
+        'х' => "h",
+        'ц' => "ts",
+        'ч' => "ch",
+        'ш' => "sh",
+        'щ' => "sch",
+        'ъ' | 'ь' => "",
+        'ю' => "yu",
+        'я' => "ya",
         _ => return None,
     })
 }
@@ -244,11 +324,17 @@ mod tests {
 
     #[test]
     fn makes_branch_names_from_what_people_type() {
-        assert_eq!(slug("LT-4900 ошибка в ваучере"), "LT-4900-oshibka-v-vauchere");
+        assert_eq!(
+            slug("LT-4900 ошибка в ваучере"),
+            "LT-4900-oshibka-v-vauchere"
+        );
         assert_eq!(slug("lt-4900"), "LT-4900");
         assert_eq!(slug("  hotfix/LT-12 Fix  NPE!! "), "LT-12-fix-npe");
         assert_eq!(slug("LT-12-npe-dev"), "LT-12-npe");
-        assert_eq!(slug("Съешь ещё этих мягких булок"), "sesh-esche-etih-myagkih-bulok");
+        assert_eq!(
+            slug("Съешь ещё этих мягких булок"),
+            "sesh-esche-etih-myagkih-bulok"
+        );
         assert_eq!(slug("LT-x"), "lt-x");
         assert_eq!(slug("   "), "");
         assert!(slug(&"очень ".repeat(30)).len() <= 60);

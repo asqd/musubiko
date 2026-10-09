@@ -65,8 +65,20 @@ impl Repo {
     /// All branches except the two bases, newest first, each compared with its target:
     /// `base` for ordinary branches, the fixed base for hotfix halves.
     pub fn branches(&self, base: &str) -> Result<Vec<Branch>> {
+        self.branches_where(base, |_| true)
+    }
+
+    /// Like [`Repo::branches`], for the branches whose name passes `keep`.
+    pub(crate) fn branches_where(
+        &self,
+        base: &str,
+        keep: impl Fn(&str) -> bool,
+    ) -> Result<Vec<Branch>> {
         let refs = self.refs()?;
-        let head = self.run(&["symbolic-ref", "--short", "-q", "HEAD"]).ok().map(|s| s.trim().to_string());
+        let head = self
+            .run(&["symbolic-ref", "--short", "-q", "HEAD"])
+            .ok()
+            .map(|s| s.trim().to_string());
 
         // Resolve each target once: its full ref and tree.
         let mut targets: HashMap<String, Option<(String, String)>> = HashMap::new();
@@ -75,18 +87,31 @@ impl Repo {
                 continue;
             }
             let resolved = match self.base_ref(name, &refs) {
-                Some(r) => Some((r.clone(), self.run(&["rev-parse", &format!("{r}^{{tree}}")])?.trim().to_string())),
+                Some(r) => Some((
+                    r.clone(),
+                    self.run(&["rev-parse", &format!("{r}^{{tree}}")])?
+                        .trim()
+                        .to_string(),
+                )),
                 None => None,
             };
             targets.insert(name.to_string(), resolved);
         }
 
-        let list: Vec<(&String, &Refs)> = refs.iter().filter(|(n, _)| !self.flow.is_base(n)).collect();
+        let list: Vec<(&String, &Refs)> = refs
+            .iter()
+            .filter(|(n, _)| !self.flow.is_base(n) && keep(n))
+            .collect();
         let mut branches: Vec<Branch> = list
             .par_iter()
             .map(|(name, r)| self.branch(name, r, base, &targets, head.as_deref()))
             .collect::<Result<_>>()?;
-        branches.sort_by(|a, b| b.tip.date.cmp(&a.tip.date).then_with(|| a.name.cmp(&b.name)));
+        branches.sort_by(|a, b| {
+            b.tip
+                .date
+                .cmp(&a.tip.date)
+                .then_with(|| a.name.cmp(&b.name))
+        });
         Ok(branches)
     }
 
@@ -103,7 +128,11 @@ impl Repo {
             (Some(l), None) => (l.clone(), Location::Local, format!("refs/heads/{name}")),
             (None, Some(rm)) => {
                 let remote = self.remote.as_deref().unwrap_or("origin");
-                (rm.clone(), Location::Remote, format!("refs/remotes/{remote}/{name}"))
+                (
+                    rm.clone(),
+                    Location::Remote,
+                    format!("refs/remotes/{remote}/{name}"),
+                )
             }
             (None, None) => unreachable!("refs map holds at least one side"),
         };
@@ -115,12 +144,16 @@ impl Repo {
             location,
             sync: self.sync(r)?,
             target: target.clone(),
-            status: Status::Unknown { error: format!("Нет ветки {target}") },
+            status: Status::Unknown {
+                error: format!("Нет ветки {target}"),
+            },
             ahead: 0,
             behind: 0,
             is_head: head == Some(name),
         };
-        let Some(Some((target_ref, target_tree))) = targets.get(&target) else { return Ok(out) };
+        let Some(Some((target_ref, target_tree))) = targets.get(&target) else {
+            return Ok(out);
+        };
 
         let (behind, ahead) = self.left_right(target_ref, &branch_ref)?;
         out.ahead = ahead;
@@ -141,15 +174,32 @@ impl Repo {
         let out = self.run(&["log", "--format=%an%x00%ae", &format!("{target}..{branch}")])?;
         Ok(out.lines().rfind(|l| !l.is_empty()).map(|l| {
             let (name, email) = l.split_once('\0').unwrap_or((l, ""));
-            Person { name: name.into(), email: email.into() }
+            Person {
+                name: name.into(),
+                email: email.into(),
+            }
         }))
     }
 
     /// Merges in memory with `git merge-tree`; the working tree and index stay untouched.
-    fn merge_status(&self, target: &str, target_tree: &str, branch: &str, target_name: &str) -> Result<Status> {
+    fn merge_status(
+        &self,
+        target: &str,
+        target_tree: &str,
+        branch: &str,
+        target_name: &str,
+    ) -> Result<Status> {
         let out = self.git.output(
             &self.root,
-            &["merge-tree", "--write-tree", "-z", "--name-only", "--no-messages", target, branch],
+            &[
+                "merge-tree",
+                "--write-tree",
+                "-z",
+                "--name-only",
+                "--no-messages",
+                target,
+                branch,
+            ],
         )?;
         let stdout = String::from_utf8_lossy(&out.stdout);
         let mut parts = stdout.split(['\0', '\n']).filter(|p| !p.is_empty());

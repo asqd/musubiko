@@ -39,11 +39,49 @@ pub struct Guard {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Effect {
-    Branch { name: String },
-    Push { remote: String, names: Vec<String> },
+    Branch {
+        name: String,
+    },
+    Push {
+        remote: String,
+        names: Vec<String>,
+    },
     Stash,
-    Switch { from: String, detached: bool },
-    Worktree { path: String },
+    Switch {
+        from: String,
+        detached: bool,
+    },
+    Worktree {
+        path: String,
+    },
+    /// A scratch worktree Musubiko removes itself when done; undo removes it by force.
+    TempWorktree {
+        path: String,
+    },
+    /// The scratch worktree was removed: its undo step is no longer needed.
+    WorktreeRemoved {
+        path: String,
+    },
+    /// The branch moved (or appeared); undo puts it back where it was before the step.
+    MoveBranch {
+        name: String,
+    },
+    /// The branch was pushed over an existing remote branch; undo restores the remote one.
+    PushUpdate {
+        remote: String,
+        name: String,
+    },
+    /// A local branch at `hash` was deleted; undo recreates it.
+    DeleteLocal {
+        name: String,
+        hash: String,
+    },
+    /// A remote branch at `hash` was deleted; undo pushes it back.
+    DeleteRemote {
+        remote: String,
+        name: String,
+        hash: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,7 +153,10 @@ impl Step {
 }
 
 fn shell_quote(a: &str) -> String {
-    if !a.is_empty() && a.chars().all(|c| c.is_ascii_alphanumeric() || "-_./:=@^~+,%".contains(c)) {
+    if !a.is_empty()
+        && a.chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_./:=@^~+,%".contains(c))
+    {
         a.to_string()
     } else {
         format!("'{}'", a.replace('\'', r"'\''"))
@@ -124,8 +165,14 @@ fn shell_quote(a: &str) -> String {
 
 impl Operation {
     pub fn new(title: impl Into<String>, repo: &Repo, steps: Vec<Step>) -> Operation {
-        let started = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
-        let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
+        let started = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0);
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.subsec_nanos())
+            .unwrap_or(0);
         Operation {
             id: format!("{started}-{nanos:09}"),
             title: title.into(),
@@ -141,7 +188,10 @@ impl Operation {
 
     /// Index of the next step to run.
     pub fn cursor(&self) -> usize {
-        self.states.iter().position(|s| !matches!(s, StepState::Done { .. })).unwrap_or(self.states.len())
+        self.states
+            .iter()
+            .position(|s| !matches!(s, StepState::Done { .. }))
+            .unwrap_or(self.states.len())
     }
 
     /// Runs the next pending (or the failed) step. A failure is recorded in the step's state
@@ -159,6 +209,9 @@ impl Operation {
         match repo.run_step(&self.steps[i]) {
             Ok((output, undo)) => {
                 self.states[i] = StepState::Done { output };
+                if let Some(Effect::WorktreeRemoved { path }) = &self.steps[i].effect {
+                    self.undo.retain(|u| !u.args.contains(path));
+                }
                 if let Some(u) = undo {
                     self.undo.push(u);
                 }
@@ -167,7 +220,9 @@ impl Operation {
                 }
             }
             Err(e) => {
-                self.states[i] = StepState::Failed { error: e.to_string() };
+                self.states[i] = StepState::Failed {
+                    error: e.to_string(),
+                };
                 self.status = OpStatus::Failed;
             }
         }
@@ -192,18 +247,31 @@ impl Repo {
     /// Runs one step; returns git's output and the undo step for what it did.
     pub fn run_step(&self, step: &Step) -> Result<(String, Option<Step>)> {
         if let Some(g) = &step.guard {
-            let out = self.git.output(&self.root, &["rev-parse", "--verify", "-q", &g.refname])?;
+            let out = self
+                .git
+                .output(&self.root, &["rev-parse", "--verify", "-q", &g.refname])?;
             let now = String::from_utf8_lossy(&out.stdout).trim().to_string();
             if now != g.hash {
                 return Err(Error::Refused(g.message.clone()));
             }
         }
+        // Where things stood before, for effects whose undo needs it.
+        let before = match &step.effect {
+            Some(Effect::MoveBranch { name }) => self.rev_opt(&format!("refs/heads/{name}"))?,
+            Some(Effect::PushUpdate { remote, name }) => {
+                self.rev_opt(&format!("refs/remotes/{remote}/{name}"))?
+            }
+            _ => None,
+        };
         let args: Vec<&str> = step.args.iter().map(String::as_str).collect();
         let out = self.git.output(&self.root, &args)?;
         let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         if !out.status.success() {
-            return Err(Error::Command { args: step.args.join(" "), stderr: if stderr.is_empty() { stdout } else { stderr } });
+            return Err(Error::Command {
+                args: step.args.join(" "),
+                stderr: if stderr.is_empty() { stdout } else { stderr },
+            });
         }
         if let Some(msg) = &step.fail_if_output {
             if !stdout.is_empty() {
@@ -211,19 +279,36 @@ impl Repo {
             }
         }
         let undo = match &step.effect {
-            None => None,
-            Some(effect) => Some(self.undo_for(effect)?),
+            None | Some(Effect::WorktreeRemoved { .. }) => None,
+            Some(effect) => Some(self.undo_for(effect, before)?),
         };
         // Push and fetch report progress on stderr; keep it for the journal.
-        let output = [stdout, stderr].into_iter().filter(|s| !s.is_empty()).collect::<Vec<_>>().join("\n");
+        let output = [stdout, stderr]
+            .into_iter()
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join("\n");
         Ok((output, undo))
     }
 
     fn rev(&self, refname: &str) -> Result<String> {
-        Ok(self.run(&["rev-parse", "--verify", refname])?.trim().to_string())
+        Ok(self
+            .run(&["rev-parse", "--verify", refname])?
+            .trim()
+            .to_string())
     }
 
-    fn undo_for(&self, effect: &Effect) -> Result<Step> {
+    fn rev_opt(&self, refname: &str) -> Result<Option<String>> {
+        let out = self
+            .git
+            .output(&self.root, &["rev-parse", "--verify", "-q", refname])?;
+        Ok(out
+            .status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string()))
+    }
+
+    fn undo_for(&self, effect: &Effect, before: Option<String>) -> Result<Step> {
         Ok(match effect {
             Effect::Branch { name } => {
                 let refname = format!("refs/heads/{name}");
@@ -240,12 +325,18 @@ impl Repo {
                 // --force-with-lease: delete only if the server still has what we pushed.
                 let mut args = vec!["push".to_string()];
                 for n in names {
-                    args.push(format!("--force-with-lease=refs/heads/{n}:{}", self.rev(&format!("refs/heads/{n}"))?));
+                    args.push(format!(
+                        "--force-with-lease=refs/heads/{n}:{}",
+                        self.rev(&format!("refs/heads/{n}"))?
+                    ));
                 }
                 args.push(remote.clone());
                 args.push("--delete".into());
                 args.extend(names.iter().cloned());
-                Step { args, ..Step::new(format!("Удалить {} на {remote}", names.join(" и ")), &[]) }
+                Step {
+                    args,
+                    ..Step::new(format!("Удалить {} на {remote}", names.join(" и ")), &[])
+                }
             }
             Effect::Stash => Step {
                 guard: Some(Guard {
@@ -256,10 +347,59 @@ impl Repo {
                 ..Step::new("Вернуть изменения из stash", &["stash", "pop"])
             },
             Effect::Switch { from, detached } => {
-                let args: Vec<&str> = if *detached { vec!["switch", "--detach", from] } else { vec!["switch", from] };
+                let args: Vec<&str> = if *detached {
+                    vec!["switch", "--detach", from]
+                } else {
+                    vec!["switch", from]
+                };
                 Step::new(format!("Вернуться на {from}"), &args)
             }
-            Effect::Worktree { path } => Step::new(format!("Удалить папку {path}"), &["worktree", "remove", path]),
+            Effect::Worktree { path } => Step::new(
+                format!("Удалить папку {path}"),
+                &["worktree", "remove", path],
+            ),
+            Effect::TempWorktree { path } => Step::new(
+                "Удалить временную папку",
+                &["worktree", "remove", "--force", path],
+            ),
+            Effect::WorktreeRemoved { .. } => unreachable!("has no undo"),
+            Effect::MoveBranch { name } => {
+                // update-ref with the expected current value: refuses if the branch moved since.
+                let refname = format!("refs/heads/{name}");
+                let now = self.rev(&refname)?;
+                match before {
+                    Some(old) => Step::new(
+                        format!("Вернуть {name} на {}", &old[..7.min(old.len())]),
+                        &["update-ref", &refname, &old, &now],
+                    ),
+                    None => Step::new(
+                        format!("Удалить ветку {name}"),
+                        &["update-ref", "-d", &refname, &now],
+                    ),
+                }
+            }
+            Effect::PushUpdate { remote, name } => {
+                let now = self.rev(&format!("refs/heads/{name}"))?;
+                let lease = format!("--force-with-lease=refs/heads/{name}:{now}");
+                match before {
+                    Some(old) => Step::new(
+                        format!("Вернуть {name} на {remote} к {}", &old[..7.min(old.len())]),
+                        &["push", &lease, remote, &format!("{old}:refs/heads/{name}")],
+                    ),
+                    None => Step::new(
+                        format!("Удалить {name} на {remote}"),
+                        &["push", &lease, remote, "--delete", name],
+                    ),
+                }
+            }
+            Effect::DeleteLocal { name, hash } => Step::new(
+                format!("Восстановить ветку {name}"),
+                &["branch", name, hash],
+            ),
+            Effect::DeleteRemote { remote, name, hash } => Step::new(
+                format!("Восстановить {name} на {remote}"),
+                &["push", remote, &format!("{hash}:refs/heads/{name}")],
+            ),
         })
     }
 }
@@ -270,9 +410,21 @@ mod tests {
 
     #[test]
     fn quotes_only_what_the_shell_needs() {
-        let s = Step::new("x", &["stash", "push", "-m", "musubiko: before hotfix/LT-1"]);
-        assert_eq!(s.command(), "git stash push -m 'musubiko: before hotfix/LT-1'");
-        let s = Step::new("x", &["branch", "--no-track", "hotfix/LT-1-fix", "origin/master"]);
-        assert_eq!(s.command(), "git branch --no-track hotfix/LT-1-fix origin/master");
+        let s = Step::new(
+            "x",
+            &["stash", "push", "-m", "musubiko: before hotfix/LT-1"],
+        );
+        assert_eq!(
+            s.command(),
+            "git stash push -m 'musubiko: before hotfix/LT-1'"
+        );
+        let s = Step::new(
+            "x",
+            &["branch", "--no-track", "hotfix/LT-1-fix", "origin/master"],
+        );
+        assert_eq!(
+            s.command(),
+            "git branch --no-track hotfix/LT-1-fix origin/master"
+        );
     }
 }

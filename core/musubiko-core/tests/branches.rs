@@ -2,11 +2,13 @@
 
 mod common;
 
-use common::{flow_fixture, Fixture};
+use common::{Fixture, flow_fixture};
 use musubiko_core::{Branch, Location, Status, Sync};
 
 fn find<'a>(list: &'a [Branch], name: &str) -> &'a Branch {
-    list.iter().find(|b| b.name == name).unwrap_or_else(|| panic!("no branch {name}"))
+    list.iter()
+        .find(|b| b.name == name)
+        .unwrap_or_else(|| panic!("no branch {name}"))
 }
 
 #[test]
@@ -14,7 +16,11 @@ fn classifies_branches_against_develop() {
     let f = flow_fixture();
     let list = f.repo().branches("develop").unwrap();
 
-    assert!(list.iter().all(|b| b.name != "master" && b.name != "develop"), "bases are listed separately");
+    assert!(
+        list.iter()
+            .all(|b| b.name != "master" && b.name != "develop"),
+        "bases are listed separately"
+    );
 
     let merged = find(&list, "feature/merged");
     assert_eq!(merged.status, Status::Merged);
@@ -25,7 +31,12 @@ fn classifies_branches_against_develop() {
     assert_eq!(squash.ahead, 2);
 
     let conflict = find(&list, "feature/conflict");
-    assert_eq!(conflict.status, Status::Conflict { files: vec!["c.txt".into()] });
+    assert_eq!(
+        conflict.status,
+        Status::Conflict {
+            files: vec!["c.txt".into()]
+        }
+    );
 
     let open = find(&list, "feature/open");
     assert_eq!(open.status, Status::Open);
@@ -41,9 +52,15 @@ fn hotfix_halves_use_their_own_base() {
     for base in ["develop", "master"] {
         let list = f.repo().branches(base).unwrap();
         let m = find(&list, "hotfix/LT-1-fix");
-        assert_eq!((m.target.as_str(), &m.status, m.ahead), ("master", &Status::Open, 1));
+        assert_eq!(
+            (m.target.as_str(), &m.status, m.ahead),
+            ("master", &Status::Open, 1)
+        );
         let d = find(&list, "hotfix/LT-1-fix-dev");
-        assert_eq!((d.target.as_str(), &d.status, d.ahead), ("develop", &Status::Open, 1));
+        assert_eq!(
+            (d.target.as_str(), &d.status, d.ahead),
+            ("develop", &Status::Open, 1)
+        );
     }
 }
 
@@ -64,7 +81,11 @@ fn reports_head_and_uncommitted_changes() {
     std::fs::write(f.root.join("notes.md"), "new\n").unwrap();
     let info = f.repo().info().unwrap();
     assert_eq!(info.head.as_deref(), Some("feature/open"));
-    let changes: Vec<(&str, &str)> = info.changes.iter().map(|c| (c.code.as_str(), c.path.as_str())).collect();
+    let changes: Vec<(&str, &str)> = info
+        .changes
+        .iter()
+        .map(|c| (c.code.as_str(), c.path.as_str()))
+        .collect();
     assert_eq!(changes, [("??", "notes.md"), ("M", "o.txt")]);
     assert_eq!(info.user.email, "me@example.com");
     let roles: Vec<&str> = info.bases.iter().map(|b| b.role.as_str()).collect();
@@ -75,7 +96,10 @@ fn reports_head_and_uncommitted_changes() {
 fn tracks_remote_and_local_copies() {
     let f = Fixture::new();
     let origin = f.root.parent().unwrap().join("origin.git");
-    f.git_in(f.root.parent().unwrap(), &["init", "-q", "--bare", "origin.git"]);
+    f.git_in(
+        f.root.parent().unwrap(),
+        &["init", "-q", "--bare", "origin.git"],
+    );
     f.commit("README", "base\n", "init");
     f.git(&["branch", "develop"]);
     f.git(&["remote", "add", "origin", origin.to_str().unwrap()]);
@@ -99,10 +123,19 @@ fn tracks_remote_and_local_copies() {
     let list = repo.branches("develop").unwrap();
     let pushed = find(&list, "feature/pushed");
     assert_eq!(pushed.location, Location::Both);
-    assert_eq!(pushed.sync, Some(Sync { ahead: 1, behind: 0 }));
+    assert_eq!(
+        pushed.sync,
+        Some(Sync {
+            ahead: 1,
+            behind: 0
+        })
+    );
     assert_eq!(pushed.ahead, 2);
     let remote = find(&list, "feature/remote-only");
-    assert_eq!((remote.location, &remote.status), (Location::Remote, &Status::Open));
+    assert_eq!(
+        (remote.location, &remote.status),
+        (Location::Remote, &Status::Open)
+    );
     assert_eq!(find(&list, "feature/local-only").location, Location::Local);
 
     let info = repo.info().unwrap();

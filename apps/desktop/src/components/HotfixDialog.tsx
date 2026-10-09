@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { After, api, commandOf, errorText, HotfixPlan, Operation, RepoInfo } from "../api";
+import { After, api, errorText, HotfixPlan, Operation, RepoInfo } from "../api";
 import { ago, copyText, plural } from "../format";
-import { CloseIcon, FlameIcon } from "./Icons";
+import { FlameIcon } from "./Icons";
+import { Dialog, RunFooter, StepsView, useOpRunner } from "./OpRun";
 
 interface Props {
   info: RepoInfo;
@@ -20,9 +21,9 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
   const [mode, setMode] = useState<Mode>(dirty ? "worktree" : "switch");
   const [stay, setStay] = useState(false);
   const [plan, setPlan] = useState<HotfixPlan | null>(null);
-  const [op, setOp] = useState<Operation | null>(null);
+  const runner = useOpRunner(onChanged);
+  const op = runner.op;
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const after: After = stay ? "stay" : mode;
 
@@ -44,59 +45,16 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
     };
   }, [name, push, after, op]);
 
-  const ready = !!plan && plan.slug !== "" && plan.problems.length === 0;
-  const running = op?.status === "running";
-  const canClose = !op || !["running", "failed"].includes(op.status);
-
-  // Runs steps until the operation finishes or stops on a failure.
-  const drive = async (start: Operation) => {
-    let cur = start;
-    setOp(cur);
-    while (cur.status === "running") {
-      cur = await api.opStep();
-      setOp(cur);
-    }
-    onChanged();
-  };
-
-  const create = async () => {
-    if (!ready || busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await drive(await api.startHotfix({ name, push, after }));
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const act = async (f: () => Promise<Operation>, thenClose = false) => {
-    setBusy(true);
-    setError(null);
-    try {
-      const next = await f();
-      if (next.status === "running") await drive(next);
-      else setOp(next);
-      onChanged();
-      if (thenClose) onClose();
-    } catch (e) {
-      setError(errorText(e));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const close = async () => {
-    if (!canClose) return;
-    if (op) await api.opClose().catch(() => undefined);
+  const ready = !!plan && plan.slug !== "" && plan.problems.length === 0 && !runner.busy;
+  const create = () => ready && runner.run(() => api.startHotfix({ name, push, after }));
+  const close = () => {
+    if (!runner.canClose) return;
+    if (op) api.opClose().catch(() => undefined);
     onClose();
   };
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") void close();
       if (e.key === "Enter" && !op && document.activeElement === inputRef.current) void create();
     };
     window.addEventListener("keydown", onKey);
@@ -105,23 +63,33 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
 
   const master = info.bases.find((b) => b.role === "master");
   const develop = info.bases.find((b) => b.role === "develop");
-  const failedAt = op ? op.states.findIndex((s) => s.kind === "failed") : -1;
 
   return (
-    <div className="backdrop" onMouseDown={(e) => e.target === e.currentTarget && close()}>
-      <div className="dlg" role="dialog" aria-modal="true" aria-labelledby="hf-title">
-        <header>
-          <span className="hot-ic">
-            <FlameIcon />
-          </span>
-          <h2 id="hf-title">{op ? op.title : "Новый hotfix"}</h2>
-          <button className="ib x" onClick={close} disabled={!canClose} aria-label="Закрыть">
-            <CloseIcon />
-          </button>
-        </header>
-
+    <Dialog
+      title={op ? op.title : "Новый hotfix"}
+      icon={<FlameIcon />}
+      canClose={runner.canClose}
+      onClose={close}
+      footer={
+        op ? (
+          <RunFooter runner={runner} onClose={close} />
+        ) : (
+          <>
+            <span className="faint small hint-left">
+              <kbd>Enter</kbd> создать
+            </span>
+            <button className="btn" onClick={close}>
+              Отмена
+            </button>
+            <button className="btn hot" onClick={create} disabled={!ready}>
+              Создать ветки
+            </button>
+          </>
+        )
+      }
+    >
         {!op ? (
-          <div className="body">
+          <>
             <div className="field">
               <label className="l" htmlFor="hf-name">
                 Название
@@ -263,76 +231,15 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
               </pre>
             </div>
             {error && <div className="banner bad">{error}</div>}
-          </div>
+          </>
         ) : (
-          <div className="body">
-            <div className="steps">
-              {op.steps.map((s, i) => {
-                const st = op.states[i];
-                const isNext = running && i === op.states.findIndex((x) => x.kind !== "done");
-                const cls = st.kind === "done" ? "ok" : st.kind === "failed" ? "fail" : isNext ? "run" : "wait";
-                return (
-                  <div key={i} className={`stp ${cls}`}>
-                    <span className="i">{cls === "ok" ? "✓" : cls === "fail" ? "✗" : cls === "run" ? <span className="spin sm" /> : "·"}</span>
-                    <span className="c">
-                      <span className="t">{s.title}</span>
-                      <span className="mono">$ {commandOf(s)}</span>
-                      {st.kind === "failed" && <span className="out">{st.error}</span>}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {op.status === "failed" && (
-              <div className="warnbox">
-                Остановился на шаге {failedAt + 1} из {op.steps.length}. Предыдущие шаги выполнены, дальше ничего не запускалось.
-              </div>
-            )}
+          <>
+            <StepsView op={op} />
             {op.status === "done" && <Done op={op} />}
-            {op.status === "rolledBack" && <div className="banner ok">Откатил: всё как было до операции.</div>}
-            {op.undoError && <div className="banner bad">Откат остановился: {op.undoError}</div>}
-            {error && <div className="banner bad">{error}</div>}
-          </div>
+          </>
         )}
-
-        <footer>
-          {!op && (
-            <>
-              <span className="faint small hint-left">
-                <kbd>Enter</kbd> создать
-              </span>
-              <button className="btn" onClick={close}>
-                Отмена
-              </button>
-              <button className="btn hot" onClick={create} disabled={!ready || busy}>
-                Создать ветки
-              </button>
-            </>
-          )}
-          {running && <span className="faint small">Выполняю…</span>}
-          {op?.status === "failed" && (
-            <>
-              <button className="btn" disabled={busy} onClick={() => act(api.opLeave, true)}>
-                Оставить как есть
-              </button>
-              {op.undo.length > 0 && (
-                <button className="btn danger" disabled={busy} onClick={() => act(api.opRollback)}>
-                  {op.undoError ? "Повторить откат" : "Откатить"}
-                </button>
-              )}
-              <button className="btn primary" disabled={busy} onClick={() => act(api.opStep)}>
-                Повторить шаг {failedAt + 1}
-              </button>
-            </>
-          )}
-          {op && ["done", "rolledBack"].includes(op.status) && (
-            <button className="btn primary" onClick={close}>
-              Закрыть
-            </button>
-          )}
-        </footer>
-      </div>
-    </div>
+        {runner.error && <div className="banner bad">{runner.error}</div>}
+    </Dialog>
   );
 }
 

@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, Branch, errorText, RepoInfo } from "./api";
+import { api, Branch, errorText, Radar as RadarData, RepoInfo } from "./api";
 import Welcome from "./components/Welcome";
 import Branches from "./components/Branches";
 import TopBar from "./components/TopBar";
 import DiffView from "./diff/DiffView";
 import HotfixDialog from "./components/HotfixDialog";
 import Journal from "./components/Journal";
-import { BranchIcon, LogIcon } from "./components/Icons";
+import Radar, { needsAttention } from "./components/Radar";
+import { BranchIcon, FlameIcon, LogIcon } from "./components/Icons";
 
 export default function App() {
   const [info, setInfo] = useState<RepoInfo | null>(null);
@@ -19,7 +20,10 @@ export default function App() {
   const lastRefresh = useRef(0);
   const [diffOf, setDiffOf] = useState<{ branch: Branch; base: string } | null>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const [view, setView] = useState<"branches" | "journal">("branches");
+  const [view, setView] = useState<"branches" | "hotfixes" | "journal">("branches");
+  const [radar, setRadar] = useState<RadarData | null>(null);
+  const [radarError, setRadarError] = useState<string | null>(null);
+  const [radarLoading, setRadarLoading] = useState(false);
   const [hotfixOpen, setHotfixOpen] = useState(false);
   const listScroll = useRef(0);
 
@@ -83,6 +87,29 @@ export default function App() {
     };
   }, [refresh, pickFolder]);
 
+  // The radar is cheap enough to keep fresh for the sidebar badge.
+  useEffect(() => {
+    if (!info) return;
+    let live = true;
+    setRadarLoading(true);
+    api
+      .radar()
+      .then((r) => {
+        if (!live) return;
+        setRadar(r);
+        setRadarError(null);
+      })
+      .catch((e) => {
+        if (!live) return;
+        setRadar(null);
+        setRadarError(errorText(e));
+      })
+      .finally(() => live && setRadarLoading(false));
+    return () => {
+      live = false;
+    };
+  }, [info?.root, tick]);
+
   const openDiff = (branch: Branch, base: string) => {
     listScroll.current = mainRef.current?.scrollTop ?? 0;
     setDiffOf({ branch, base });
@@ -128,7 +155,28 @@ export default function App() {
           <BranchIcon />
           Ветки
         </button>
-        <button className={`nav ${view === "journal" ? "on" : ""}`} onClick={() => setView("journal")}>
+        <button
+          className={`nav ${view === "hotfixes" ? "on" : ""}`}
+          onClick={() => {
+            setView("hotfixes");
+            setDiffOf(null);
+          }}
+        >
+          <FlameIcon />
+          Хотфиксы
+          {needsAttention(radar) > 0 && (
+            <span className="badge" title="Требуют внимания">
+              {needsAttention(radar)}
+            </span>
+          )}
+        </button>
+        <button
+          className={`nav ${view === "journal" ? "on" : ""}`}
+          onClick={() => {
+            setView("journal");
+            setDiffOf(null);
+          }}
+        >
           <LogIcon />
           Журнал
         </button>
@@ -148,10 +196,21 @@ export default function App() {
         <div hidden={!!diffOf || view !== "branches"}>
           <Branches info={info} tick={tick} active={!diffOf && view === "branches" && !hotfixOpen} onOpen={openDiff} />
         </div>
-        {diffOf && view === "branches" && (
+        <div hidden={!!diffOf || view !== "hotfixes"}>
+          <Radar
+            info={info}
+            radar={radar}
+            error={radarError}
+            loading={radarLoading}
+            onHotfix={() => setHotfixOpen(true)}
+            onDiff={(b) => openDiff(b, b.target)}
+            onChanged={refresh}
+          />
+        </div>
+        {diffOf && (
           <DiffView key={diffOf.branch.name} info={info} branch={diffOf.branch} base={diffOf.base} tick={tick} onBack={closeDiff} />
         )}
-        {view === "journal" && <Journal tick={tick} onChanged={refresh} />}
+        {view === "journal" && !diffOf && <Journal tick={tick} onChanged={refresh} />}
       </main>
       {hotfixOpen && <HotfixDialog info={info} onClose={() => setHotfixOpen(false)} onChanged={refresh} />}
     </div>

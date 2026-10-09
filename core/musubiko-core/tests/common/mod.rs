@@ -18,7 +18,11 @@ impl Fixture {
         let dir = TempDir::new().unwrap();
         let root = dir.path().join("work");
         std::fs::create_dir(&root).unwrap();
-        let f = Fixture { git: Git::discover().expect("git 2.38+"), root, _dir: dir };
+        let f = Fixture {
+            git: Git::discover().expect("git 2.38+"),
+            root,
+            _dir: dir,
+        };
         f.git_in(&f.root, &["init", "-q", "-b", "master"]);
         f.git(&["config", "user.email", "me@example.com"]);
         // The app's own git calls (stash makes a commit) read the repository config.
@@ -39,7 +43,11 @@ impl Fixture {
             .env("GIT_COMMITTER_EMAIL", "tester@example.com")
             .output()
             .unwrap();
-        assert!(out.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&out.stderr));
+        assert!(
+            out.status.success(),
+            "git {args:?}: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
         String::from_utf8_lossy(&out.stdout).into_owned()
     }
 
@@ -68,7 +76,14 @@ pub fn flow_fixture() -> Fixture {
     f.git(&["checkout", "-q", "-b", "feature/merged"]);
     f.commit("m.txt", "m\n", "merged work");
     f.git(&["checkout", "-q", "develop"]);
-    f.git(&["merge", "-q", "--no-ff", "-m", "Merge feature/merged", "feature/merged"]);
+    f.git(&[
+        "merge",
+        "-q",
+        "--no-ff",
+        "-m",
+        "Merge feature/merged",
+        "feature/merged",
+    ]);
 
     f.git(&["checkout", "-q", "-b", "feature/squash"]);
     f.commit("s.txt", "s1\n", "squash 1");
@@ -94,7 +109,6 @@ pub fn flow_fixture() -> Fixture {
     f
 }
 
-
 /// A fixture whose master and develop also live on a bare `origin` next to it.
 pub fn with_origin() -> Fixture {
     let f = Fixture::new();
@@ -102,7 +116,12 @@ pub fn with_origin() -> Fixture {
     f.git_in(&parent, &["init", "-q", "--bare", "origin.git"]);
     f.commit("README", "base\n", "init");
     f.git(&["branch", "develop"]);
-    f.git(&["remote", "add", "origin", parent.join("origin.git").to_str().unwrap()]);
+    f.git(&[
+        "remote",
+        "add",
+        "origin",
+        parent.join("origin.git").to_str().unwrap(),
+    ]);
     f.git(&["push", "-q", "origin", "master", "develop"]);
     f.git(&["fetch", "-q", "origin"]);
     f.git(&["checkout", "-q", "-b", "feature/work", "develop"]);

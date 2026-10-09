@@ -172,7 +172,7 @@ export default function DiffView({ info, branch, base, tick, onBack }: Props) {
     <div className="page">
       <div className="dhead">
         <button className="btn ghost" onClick={onBack} title="Назад к веткам (Esc)">
-          ← Ветки
+          ← Назад
         </button>
         <div className="refs">
           <button className="ref" onClick={() => copy(branch.name)} title="Скопировать имя ветки">
