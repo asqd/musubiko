@@ -8,6 +8,8 @@ mod diff;
 mod error;
 mod flow;
 mod git;
+mod hotfix;
+mod ops;
 mod repo;
 
 pub use branches::{Branch, Location, Status, Sync};
@@ -15,4 +17,6 @@ pub use diff::{BranchDiff, ConflictFile, ConflictRegion, FileChange, FileDiff, H
 pub use error::{Error, Result};
 pub use flow::Flow;
 pub use git::{Git, MIN_VERSION};
+pub use hotfix::{slugify, After, HotfixInput, HotfixPlan};
+pub use ops::{Effect, Guard, OpStatus, Operation, Step, StepState};
 pub use repo::{BaseTip, Change, Commit, Person, Repo, RepoInfo};

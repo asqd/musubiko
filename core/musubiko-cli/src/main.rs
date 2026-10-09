@@ -2,13 +2,15 @@
 //! `musubiko info [PATH]` prints the repository summary.
 //! `musubiko diff BRANCH [PATH] [--base develop] [-w]` prints the branch's changes per file.
 //! `musubiko conflicts BRANCH [PATH]` prints where merging into the base would conflict.
+//! `musubiko hotfix NAME [PATH] [--after worktree|switch|stay] [--no-push] [--run]` plans a hotfix
+//! pair and, with `--run`, creates it.
 //! `--json` prints exactly what the app receives.
 
 use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use musubiko_core::{Git, Location, Repo, Status};
+use musubiko_core::{After, Git, HotfixInput, Location, OpStatus, Repo, Status, StepState};
 
 fn main() -> ExitCode {
     match run() {
@@ -28,12 +30,24 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut json = false;
     let mut ignore_ws = false;
     let mut branch: Option<String> = None;
+    let mut after = After::Stay;
+    let mut push = true;
+    let mut execute = false;
     while let Some(a) = args.next() {
         match a.as_str() {
             "--base" => base = args.next(),
             "--json" => json = true,
             "-w" => ignore_ws = true,
-            _ if (cmd == "diff" || cmd == "conflicts") && branch.is_none() => branch = Some(a),
+            "--no-push" => push = false,
+            "--run" => execute = true,
+            "--after" => {
+                after = match args.next().as_deref() {
+                    Some("worktree") => After::Worktree,
+                    Some("switch") => After::Switch,
+                    _ => After::Stay,
+                }
+            }
+            _ if matches!(cmd.as_str(), "diff" | "conflicts" | "hotfix") && branch.is_none() => branch = Some(a),
             _ => path = PathBuf::from(a),
         }
     }
@@ -134,7 +148,39 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
         }
-        other => return Err(format!("неизвестная команда {other}; есть branches, diff, conflicts и info").into()),
+        "hotfix" => {
+            let input = HotfixInput { name: branch.ok_or("укажите название: musubiko hotfix NAME [PATH]")?, push, after };
+            let plan = repo.plan_hotfix(&input)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&plan)?);
+                return Ok(());
+            }
+            println!("{} ← {}\n{} ← {}", plan.master_branch, plan.master_from, plan.dev_branch, plan.dev_from);
+            for p in &plan.problems {
+                println!("! {p}");
+            }
+            if !execute {
+                for c in &plan.commands {
+                    println!("  $ {c}");
+                }
+                eprintln!("Это план. Чтобы выполнить, добавьте --run");
+                return Ok(());
+            }
+            let mut op = repo.start_hotfix(&input)?;
+            while op.status == OpStatus::Running {
+                let i = op.cursor();
+                op.step(&repo);
+                match &op.states[i] {
+                    StepState::Done { .. } => println!("✓ {}", op.steps[i].command()),
+                    StepState::Failed { error } => println!("✗ {}\n  {error}", op.steps[i].command()),
+                    StepState::Pending => {}
+                }
+            }
+            if op.status != OpStatus::Done {
+                return Err("остановился; сделанное не откатывал".into());
+            }
+        }
+        other => return Err(format!("неизвестная команда {other}; есть branches, diff, conflicts, hotfix и info").into()),
     }
     Ok(())
 }

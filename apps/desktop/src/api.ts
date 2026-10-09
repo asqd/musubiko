@@ -127,6 +127,52 @@ export interface ConflictFile {
   note: string | null;
 }
 
+export type After = "worktree" | "switch" | "stay";
+
+export interface HotfixInput {
+  name: string;
+  push: boolean;
+  after: After;
+}
+
+export interface Step {
+  title: string;
+  args: string[];
+}
+
+export interface HotfixPlan {
+  slug: string;
+  masterBranch: string;
+  devBranch: string;
+  masterFrom: string;
+  devFrom: string;
+  worktreePath: string | null;
+  canPush: boolean;
+  steps: Step[];
+  commands: string[];
+  problems: string[];
+}
+
+export type StepState = { kind: "pending" } | { kind: "done"; output: string } | { kind: "failed"; error: string };
+export type OpStatus = "running" | "done" | "failed" | "partial" | "rolledBack" | "undone";
+
+export interface Operation {
+  id: string;
+  title: string;
+  repo: string;
+  started: number;
+  steps: Step[];
+  states: StepState[];
+  undo: Step[];
+  status: OpStatus;
+  undoError: string | null;
+}
+
+/** The command line a step runs, as shown to the user. */
+export function commandOf(step: Step): string {
+  return ["git", ...step.args.map((a) => (/^[\w\-./:=@^~+,%]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`))].join(" ");
+}
+
 export const api = {
   openRepo: (path: string) => invoke<RepoInfo>("open_repo", { path }),
   repoInfo: () => invoke<RepoInfo>("repo_info"),
@@ -136,6 +182,14 @@ export const api = {
   commitDiff: (hash: string, ignoreWhitespace: boolean) => invoke<FileDiff[]>("commit_diff", { hash, ignoreWhitespace }),
   fileLines: (rev: string, path: string) => invoke<string[]>("file_lines", { rev, path }),
   conflicts: (branch: string, base: string) => invoke<ConflictFile[]>("conflicts", { branch, base }),
+  planHotfix: (input: HotfixInput) => invoke<HotfixPlan>("plan_hotfix", { input }),
+  startHotfix: (input: HotfixInput) => invoke<Operation>("start_hotfix", { input }),
+  opStep: () => invoke<Operation>("op_step"),
+  opRollback: () => invoke<Operation>("op_rollback"),
+  opLeave: () => invoke<Operation>("op_leave"),
+  opClose: () => invoke<void>("op_close"),
+  journal: () => invoke<Operation[]>("journal_list"),
+  journalUndo: (id: string) => invoke<Operation>("journal_undo", { id }),
   recentRepos: () => invoke<string[]>("recent_repos"),
   forgetRepo: (path: string) => invoke<string[]>("forget_repo", { path }),
 };

@@ -5,7 +5,9 @@ import Welcome from "./components/Welcome";
 import Branches from "./components/Branches";
 import TopBar from "./components/TopBar";
 import DiffView from "./diff/DiffView";
-import { BranchIcon } from "./components/Icons";
+import HotfixDialog from "./components/HotfixDialog";
+import Journal from "./components/Journal";
+import { BranchIcon, LogIcon } from "./components/Icons";
 
 export default function App() {
   const [info, setInfo] = useState<RepoInfo | null>(null);
@@ -17,6 +19,8 @@ export default function App() {
   const lastRefresh = useRef(0);
   const [diffOf, setDiffOf] = useState<{ branch: Branch; base: string } | null>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const [view, setView] = useState<"branches" | "journal">("branches");
+  const [hotfixOpen, setHotfixOpen] = useState(false);
   const listScroll = useRef(0);
 
   useEffect(() => {
@@ -30,6 +34,7 @@ export default function App() {
     try {
       setInfo(await api.openRepo(path));
       setDiffOf(null);
+      setView("branches");
       setRecent(await api.recentRepos());
     } catch (e) {
       setError(errorText(e));
@@ -106,15 +111,26 @@ export default function App() {
       <TopBar
         info={info}
         onRefresh={refresh}
+        onHotfix={() => setHotfixOpen(true)}
         onSwitch={() => {
           setInfo(null);
           setDiffOf(null);
         }}
       />
       <nav className="side" aria-label="Разделы">
-        <button className="nav on" onClick={() => diffOf && closeDiff()}>
+        <button
+          className={`nav ${view === "branches" ? "on" : ""}`}
+          onClick={() => {
+            setView("branches");
+            if (diffOf) closeDiff();
+          }}
+        >
           <BranchIcon />
           Ветки
+        </button>
+        <button className={`nav ${view === "journal" ? "on" : ""}`} onClick={() => setView("journal")}>
+          <LogIcon />
+          Журнал
         </button>
         <div className="side-foot">
           <div className="faint" title={info.root}>{info.root.replace(/^\/Users\/[^/]+/, "~")}</div>
@@ -129,11 +145,15 @@ export default function App() {
           </div>
         )}
         {/* The list stays mounted under the diff so going back keeps filters and scroll. */}
-        <div hidden={!!diffOf}>
-          <Branches info={info} tick={tick} active={!diffOf} onOpen={openDiff} />
+        <div hidden={!!diffOf || view !== "branches"}>
+          <Branches info={info} tick={tick} active={!diffOf && view === "branches" && !hotfixOpen} onOpen={openDiff} />
         </div>
-        {diffOf && <DiffView key={diffOf.branch.name} info={info} branch={diffOf.branch} base={diffOf.base} tick={tick} onBack={closeDiff} />}
+        {diffOf && view === "branches" && (
+          <DiffView key={diffOf.branch.name} info={info} branch={diffOf.branch} base={diffOf.base} tick={tick} onBack={closeDiff} />
+        )}
+        {view === "journal" && <Journal tick={tick} onChanged={refresh} />}
       </main>
+      {hotfixOpen && <HotfixDialog info={info} onClose={() => setHotfixOpen(false)} onChanged={refresh} />}
     </div>
   );
 }

@@ -3,18 +3,21 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod journal;
 mod recent;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use musubiko_core::{Branch, BranchDiff, ConflictFile, FileDiff, Git, Repo, RepoInfo};
+use musubiko_core::{Branch, BranchDiff, ConflictFile, FileDiff, Git, HotfixInput, HotfixPlan, OpStatus, Operation, Repo, RepoInfo};
 use tauri::{AppHandle, State};
 
 #[derive(Default)]
 struct AppState {
     git: Mutex<Option<Git>>,
     repo: Mutex<Option<Repo>>,
+    /// The operation in progress, run one step per command so the UI can show each.
+    op: Mutex<Option<Operation>>,
 }
 
 impl AppState {
@@ -96,6 +99,92 @@ async fn conflicts(branch: String, base: String, state: State<'_, AppState>) -> 
 }
 
 #[tauri::command]
+async fn plan_hotfix(input: HotfixInput, state: State<'_, AppState>) -> Result<HotfixPlan, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.plan_hotfix(&input)).await
+}
+
+#[tauri::command]
+async fn start_hotfix(input: HotfixInput, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+    if state.op.lock().unwrap().as_ref().is_some_and(|o| matches!(o.status, OpStatus::Running | OpStatus::Failed)) {
+        return Err("Уже идёт другая операция".into());
+    }
+    let repo = state.repo()?;
+    let op = blocking(move || repo.start_hotfix(&input)).await?;
+    journal::upsert(&app, &op);
+    *state.op.lock().unwrap() = Some(op.clone());
+    Ok(op)
+}
+
+/// Applies `f` to the current operation off the main thread and records the result.
+async fn with_op(
+    app: &AppHandle,
+    state: &State<'_, AppState>,
+    f: impl FnOnce(&mut Operation, &Repo) + Send + 'static,
+) -> Result<Operation, String> {
+    let repo = state.repo()?;
+    let mut op = state.op.lock().unwrap().clone().ok_or("Нет операции")?;
+    let op = tauri::async_runtime::spawn_blocking(move || {
+        f(&mut op, &repo);
+        op
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    journal::upsert(app, &op);
+    *state.op.lock().unwrap() = Some(op.clone());
+    Ok(op)
+}
+
+/// Runs the next step, or retries the failed one.
+#[tauri::command]
+async fn op_step(app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+    with_op(&app, &state, |op, repo| op.step(repo)).await
+}
+
+/// Undoes what the stopped operation already did.
+#[tauri::command]
+async fn op_rollback(app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+    with_op(&app, &state, |op, repo| op.undo_all(repo, OpStatus::RolledBack)).await
+}
+
+/// Keeps what the stopped operation did and closes it.
+#[tauri::command]
+async fn op_leave(app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+    let op = with_op(&app, &state, |op, _| op.status = OpStatus::Partial).await?;
+    *state.op.lock().unwrap() = None;
+    Ok(op)
+}
+
+#[tauri::command]
+fn op_close(state: State<'_, AppState>) {
+    let mut op = state.op.lock().unwrap();
+    if op.as_ref().is_some_and(|o| !matches!(o.status, OpStatus::Running | OpStatus::Failed)) {
+        *op = None;
+    }
+}
+
+#[tauri::command]
+fn journal_list(app: AppHandle, state: State<'_, AppState>) -> Result<Vec<Operation>, String> {
+    let repo = state.repo()?;
+    Ok(journal::list(&app, repo.root()))
+}
+
+/// Undoes a finished operation from the journal, guarded against later changes.
+#[tauri::command]
+async fn journal_undo(id: String, app: AppHandle, state: State<'_, AppState>) -> Result<Operation, String> {
+    let git = state.git()?;
+    let mut op = journal::get(&app, &id).ok_or("Операции нет в журнале")?;
+    let op = blocking(move || {
+        let repo = Repo::open(git, &op.repo)?;
+        op.undo_all(&repo, OpStatus::Undone);
+        Ok(op)
+    })
+    .await?;
+    journal::upsert(&app, &op);
+    Ok(op)
+}
+
+#[tauri::command]
 fn recent_repos(app: AppHandle) -> Vec<String> {
     recent::list(&app)
 }
@@ -108,6 +197,7 @@ fn forget_repo(path: String, app: AppHandle) -> Vec<String> {
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             open_repo,
@@ -117,6 +207,14 @@ fn main() {
             commit_diff,
             file_lines,
             conflicts,
+            plan_hotfix,
+            start_hotfix,
+            op_step,
+            op_rollback,
+            op_leave,
+            op_close,
+            journal_list,
+            journal_undo,
             recent_repos,
             forget_repo
         ])

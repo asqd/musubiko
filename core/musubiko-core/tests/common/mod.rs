@@ -21,6 +21,8 @@ impl Fixture {
         let f = Fixture { git: Git::discover().expect("git 2.38+"), root, _dir: dir };
         f.git_in(&f.root, &["init", "-q", "-b", "master"]);
         f.git(&["config", "user.email", "me@example.com"]);
+        // The app's own git calls (stash makes a commit) read the repository config.
+        f.git(&["config", "user.name", "Me"]);
         f
     }
 
@@ -92,3 +94,37 @@ pub fn flow_fixture() -> Fixture {
     f
 }
 
+
+/// A fixture whose master and develop also live on a bare `origin` next to it.
+pub fn with_origin() -> Fixture {
+    let f = Fixture::new();
+    let parent = f.root.parent().unwrap().to_path_buf();
+    f.git_in(&parent, &["init", "-q", "--bare", "origin.git"]);
+    f.commit("README", "base\n", "init");
+    f.git(&["branch", "develop"]);
+    f.git(&["remote", "add", "origin", parent.join("origin.git").to_str().unwrap()]);
+    f.git(&["push", "-q", "origin", "master", "develop"]);
+    f.git(&["fetch", "-q", "origin"]);
+    f.git(&["checkout", "-q", "-b", "feature/work", "develop"]);
+    f
+}
+
+impl Fixture {
+    /// Branch names on origin.
+    pub fn remote_heads(&self) -> Vec<String> {
+        self.git(&["ls-remote", "--heads", "origin"])
+            .lines()
+            .filter_map(|l| l.split_once("refs/heads/").map(|(_, n)| n.to_string()))
+            .collect()
+    }
+
+    pub fn has_branch(&self, name: &str) -> bool {
+        Command::new(self.git.path())
+            .args(["rev-parse", "--verify", "-q", &format!("refs/heads/{name}")])
+            .current_dir(&self.root)
+            .output()
+            .unwrap()
+            .status
+            .success()
+    }
+}

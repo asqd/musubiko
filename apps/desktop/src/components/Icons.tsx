@@ -20,6 +20,15 @@ export const CloseIcon = () => (
   <svg {...base} strokeWidth={1.8}><path d="m4 4 8 8M12 4l-8 8" /></svg>
 );
 
+export const FlameIcon = () => (
+  <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+    <path d="M8 15c-3 0-5-2.2-5-5.2 0-1.4.4-2.5 1-3.4C4 8.5 5.3 9.5 5.3 9.5S4.8 6.7 7 4.6C7.6 4 8 3.2 8 2.2c2.6 1.6 5 4.3 5 7.6C13 12.8 11 15 8 15z" />
+  </svg>
+);
+export const LogIcon = () => (
+  <svg {...base}><circle cx="8" cy="8" r="6" /><path d="M8 4.8V8l2.2 1.5" /></svg>
+);
+
 /** The knot: two branches tied together. */
 export const Logo = ({ size = 22 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">

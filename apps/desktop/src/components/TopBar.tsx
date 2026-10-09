@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { RepoInfo } from "../api";
 import { plural } from "../format";
-import { BranchIcon, Logo, RefreshIcon } from "./Icons";
+import { BranchIcon, FlameIcon, Logo, RefreshIcon } from "./Icons";
 
 interface Props {
   info: RepoInfo;
   onRefresh: () => Promise<void>;
+  onHotfix: () => void;
   onSwitch: () => void;
 }
 
-export default function TopBar({ info, onRefresh, onSwitch }: Props) {
+export default function TopBar({ info, onRefresh, onHotfix, onSwitch }: Props) {
   const [busy, setBusy] = useState(false);
   const n = info.changes.length;
   const changesTitle = info.changes.map((c) => `${c.code.padEnd(2)} ${c.path}`).join("\n");
@@ -42,6 +43,10 @@ export default function TopBar({ info, onRefresh, onSwitch }: Props) {
       <button className="btn ghost" onClick={refresh} disabled={busy} title="Перечитать репозиторий (⌘R)">
         {busy ? <span className="spin" /> : <RefreshIcon />}
         Обновить
+      </button>
+      <button className="btn hot" onClick={onHotfix} title="hotfix/… от master и hotfix/…-dev от develop">
+        <FlameIcon />
+        Новый hotfix
       </button>
     </header>
   );
