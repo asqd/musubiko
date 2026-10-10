@@ -427,12 +427,13 @@ pre.cmds .pending { color: var(--faint); }
 .res.no { color: var(--bad); }
 .ph .basepick-btn { max-width: min(460px, 60vw); }
 /* my branches */
-select.who { padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel); font-size: 13px; max-width: 320px; }
-.summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
-.stat { display: flex; align-items: baseline; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 13px; }
-.stat b { font: 600 16px var(--mono); }
-.stat.bad b { color: var(--bad); }
-.stat.ok b { color: var(--ok); }
+.fchip.alert .n { color: var(--bad); font-weight: 600; }
+.person-btn { max-width: 360px; }
+.person-btn .faint { font-weight: 400; }
+.ava { width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; color: #fff; font: 600 9.5px var(--sans); letter-spacing: 0; }
+.basepick-pop li.person { gap: 9px; }
+.basepick-pop li.person .who-text { display: grid; min-width: 0; flex: 1; }
+.basepick-pop li.person .pal-label { font-size: 13px; }
 .hf.work .hh h3 { font-size: 14px; }
 .hf.work .to { color: var(--faint); font-size: 12.5px; }
 .why { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 10px; }

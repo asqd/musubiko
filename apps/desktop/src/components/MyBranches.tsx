@@ -5,6 +5,9 @@ import { StatusPill } from "./Branches";
 import { DeleteDialog } from "./OpDialogs";
 import { ErrorBanner } from "./ErrorBanner";
 import { CardIcon, PlusIcon, SwitchIcon } from "./Icons";
+import PersonPicker from "./PersonPicker";
+
+type Filter = "all" | "attention" | "active" | "merged";
 
 interface Props {
   info: RepoInfo;
@@ -22,6 +25,13 @@ interface Props {
   onNewBranch: () => void;
   onChanged: () => void;
 }
+
+const EMPTY: Record<Filter, string> = {
+  all: "Веток нет",
+  attention: "Ничего не требует внимания",
+  active: "Веток в работе без проблем нет",
+  merged: "Слитых веток нет",
+};
 
 /** What stands in the way, as a chip: text and how bad it is. */
 function reason(a: Attention, target: string): [string, "bad" | "warn"] {
@@ -51,7 +61,7 @@ export default function MyBranches({ info, mine, loading, error, base, tick, onD
   const [other, setOther] = useState<Data | null>(null);
   const [otherLoading, setOtherLoading] = useState(false);
   const [otherError, setOtherError] = useState<string | null>(null);
-  const [showMerged, setShowMerged] = useState(false);
+  const [filter, setFilter] = useState<Filter>("all");
   const [deleting, setDeleting] = useState<Branch[] | null>(null);
   const request = useRef(0);
 
@@ -71,30 +81,30 @@ export default function MyBranches({ info, mine, loading, error, base, tick, onD
   const data = who ? other : mine;
   const busy = who ? otherLoading : loading;
   const err = who ? otherError : error;
-  const meEmail = info.user.email.toLowerCase();
   const owners = mine?.owners ?? [];
   const isMe = !who;
+  const show = (f: Filter) => filter === "all" || filter === f;
+  const chips: [Filter, string, number][] = data
+    ? [
+        ["all", "Все", data.attention.length + data.active.length + data.merged.length],
+        ["attention", "Требуют внимания", data.attention.length],
+        ["active", "В работе", data.active.length],
+        ["merged", "Слиты", data.merged.length],
+      ]
+    : [];
+  const deletable = data?.merged.filter((b) => !b.isHead) ?? [];
 
   return (
     <div className="page">
       <div className="ph">
         <h1>{isMe ? "Мои ветки" : "Ветки коллеги"}</h1>
         {owners.length > 0 && (
-          <select
-            className="who"
-            value={who ?? ""}
-            onChange={(e) => setWho(e.target.value || null)}
-            aria-label="Чьи ветки показать"
-          >
-            <option value="">Мои{info.user.email ? ` (${info.user.email})` : ""}</option>
-            {owners
-              .filter((o) => o.person.email.toLowerCase() !== meEmail)
-              .map((o) => (
-                <option key={o.person.email || o.person.name} value={o.person.email || o.person.name}>
-                  {o.person.name || o.person.email} · {o.active} в работе
-                </option>
-              ))}
-          </select>
+          <PersonPicker
+            value={who}
+            me={info.user}
+            people={owners.map((o) => ({ person: o.person, hint: `${o.active} в работе` }))}
+            onChange={setWho}
+          />
         )}
         {busy && <span className="spin muted" />}
         <span className="sp" />
@@ -106,7 +116,7 @@ export default function MyBranches({ info, mine, loading, error, base, tick, onD
       <p className="legend">
         Ветки, где автор первого своего коммита — {isMe ? "вы" : data?.author.name || data?.author.email || "коллега"}. Сверху то,
         что мешает влить: конфликт, отставание от базы больше чем на {data?.behindAlert ?? 20} коммитов, незапушенное, затишье
-        дольше {data?.quietDays ?? 7} дней. Слитые собраны внизу, их можно удалить разом.
+        дольше {data?.quietDays ?? 7} дней. Слитые можно удалить разом.
       </p>
       {isMe && !info.user.email && (
         <div className="banner">
@@ -117,72 +127,76 @@ export default function MyBranches({ info, mine, loading, error, base, tick, onD
 
       {data && (
         <>
-          <div className="summary">
-            <span className={`stat ${data.attention.length ? "bad" : ""}`}>
-              <b>{data.attention.length}</b> требуют внимания
-            </span>
-            <span className="stat">
-              <b>{data.active.length}</b> в работе
-            </span>
-            <span className="stat ok">
-              <b>{data.merged.length}</b> слиты
-            </span>
+          <div className="filters">
+            {chips.map(([k, l, n]) => (
+              <button key={k} className={`fchip ${filter === k ? "on" : ""} ${k === "attention" && n > 0 ? "alert" : ""}`} onClick={() => setFilter(k)}>
+                {l}
+                <span className="n">{n}</span>
+              </button>
+            ))}
           </div>
 
-          {data.attention.length > 0 && (
-            <h2 className="group-h">
-              Требуют внимания <span className="faint">{data.attention.length}</span>
-            </h2>
+          {show("attention") && data.attention.length > 0 && (
+            <>
+              {filter === "all" && (
+                <h2 className="group-h">
+                  Требуют внимания <span className="faint">{data.attention.length}</span>
+                </h2>
+              )}
+              {data.attention.map((w) => (
+                <WorkCard key={w.branch.name} w={w} onDiff={onDiff} onCard={onCard} onCheckout={onCheckout} onFind={onFind} />
+              ))}
+            </>
           )}
-          {data.attention.map((w) => (
-            <WorkCard key={w.branch.name} w={w} onDiff={onDiff} onCard={onCard} onCheckout={onCheckout} onFind={onFind} />
-          ))}
-          {data.active.length > 0 && (
-            <h2 className="group-h">
-              В работе <span className="faint">{data.active.length}</span>
-            </h2>
+          {show("active") && data.active.length > 0 && (
+            <>
+              {filter === "all" && (
+                <h2 className="group-h">
+                  В работе <span className="faint">{data.active.length}</span>
+                </h2>
+              )}
+              {data.active.map((w) => (
+                <WorkCard key={w.branch.name} w={w} onDiff={onDiff} onCard={onCard} onCheckout={onCheckout} onFind={onFind} />
+              ))}
+            </>
           )}
-          {data.active.map((w) => (
-            <WorkCard key={w.branch.name} w={w} onDiff={onDiff} onCard={onCard} onCheckout={onCheckout} onFind={onFind} />
-          ))}
-          {data.attention.length + data.active.length === 0 && (
+          {show("merged") && data.merged.length > 0 && (
+            <>
+              {filter === "all" && (
+                <h2 className="group-h">
+                  Слиты, можно удалить <span className="faint">{data.merged.length}</span>
+                </h2>
+              )}
+              <div className="hf merged-list">
+                {data.merged.map((b) => (
+                  <div key={b.name} className="mrow">
+                    <button className="linklike mono ell" onClick={() => onCard(b.name)} title="Карточка ветки">
+                      {b.name}
+                    </button>
+                    <StatusPill status={b.status} target={b.target} />
+                    <span className="faint small nowrap" title={fullDate(b.tip.date)}>
+                      {b.upstreamGone ? "удалена на сервере · " : ""}
+                      {ago(b.tip.date)} назад
+                    </span>
+                  </div>
+                ))}
+                <div className="foot">
+                  <span className="muted small">Удалю локально и на сервере одним push, с возвратом из журнала.</span>
+                  <span className="sp" />
+                  <button className="btn danger" disabled={deletable.length === 0} onClick={() => setDeleting(deletable)}>
+                    Удалить {deletable.length}…
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+          {(filter === "all" ? chips[0][2] : chips.find((c) => c[0] === filter)?.[2]) === 0 && (
             <div className="tablewrap">
               <div className="empty">
-                <h3>Веток в работе нет</h3>
-                {isMe ? "Создайте ветку кнопкой «Новая ветка»." : "У этого автора всё слито."}
+                <h3>{EMPTY[filter]}</h3>
+                {filter === "all" && isMe && "Создайте ветку кнопкой «Новая ветка»."}
               </div>
             </div>
-          )}
-
-          {data.merged.length > 0 && (
-            <>
-              <button className="group-h toggle-h" onClick={() => setShowMerged((v) => !v)}>
-                {showMerged ? "▾" : "▸"} Слиты, можно удалить <span className="faint">{data.merged.length}</span>
-              </button>
-              {showMerged && (
-                <div className="hf merged-list">
-                  {data.merged.map((b) => (
-                    <div key={b.name} className="mrow">
-                      <button className="linklike mono ell" onClick={() => onCard(b.name)} title="Карточка ветки">
-                        {b.name}
-                      </button>
-                      <StatusPill status={b.status} target={b.target} />
-                      <span className="faint small nowrap" title={fullDate(b.tip.date)}>
-                        {b.upstreamGone ? "удалена на сервере · " : ""}
-                        {ago(b.tip.date)} назад
-                      </span>
-                    </div>
-                  ))}
-                  <div className="foot">
-                    <span className="muted small">Удалю локально и на сервере одним push, с возвратом из журнала.</span>
-                    <span className="sp" />
-                    <button className="btn danger" onClick={() => setDeleting(data.merged.filter((b) => !b.isHead))}>
-                      Удалить {data.merged.filter((b) => !b.isHead).length}…
-                    </button>
-                  </div>
-                </div>
-              )}
-            </>
           )}
         </>
       )}
