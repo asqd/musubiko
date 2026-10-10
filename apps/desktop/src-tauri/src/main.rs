@@ -13,8 +13,8 @@ use std::sync::Mutex;
 
 use musubiko_core::{
     Branch, BranchCard, BranchDiff, CheckoutInput, CheckoutPlan, CommitSearch, ConflictFile,
-    DeleteInput, FileDiff, Git, HotfixInput, HotfixPlan, NewBranchInput, NewBranchPlan, OpPlan,
-    OpStatus, Operation, PickState, PortInput, Radar, Repo, RepoInfo, Side,
+    DeleteInput, FileDiff, Git, HotfixInput, HotfixPlan, MyBranches, NewBranchInput, NewBranchPlan,
+    OpPlan, OpStatus, Operation, PickState, PortInput, Radar, Repo, RepoInfo, Side,
 };
 use tauri::{AppHandle, State};
 
@@ -82,6 +82,16 @@ async fn repo_info(state: State<'_, AppState>) -> Result<RepoInfo, String> {
 async fn list_branches(base: String, state: State<'_, AppState>) -> Result<Vec<Branch>, String> {
     let repo = state.repo()?;
     blocking(move || repo.branches(&base)).await
+}
+
+#[tauri::command]
+async fn my_branches(
+    base: String,
+    author: Option<String>,
+    state: State<'_, AppState>,
+) -> Result<MyBranches, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.my_branches(&base, author.as_deref())).await
 }
 
 #[tauri::command]
@@ -486,6 +496,7 @@ fn main() {
             repo_info,
             list_branches,
             branch_card,
+            my_branches,
             branch_diff,
             commit_diff,
             file_lines,

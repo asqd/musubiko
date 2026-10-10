@@ -426,6 +426,26 @@ pre.cmds .pending { color: var(--faint); }
 .res.ok { color: var(--ok); }
 .res.no { color: var(--bad); }
 .ph .basepick-btn { max-width: min(460px, 60vw); }
+/* my branches */
+select.who { padding: 4px 8px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel); font-size: 13px; max-width: 320px; }
+.summary { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.stat { display: flex; align-items: baseline; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); font-size: 13px; }
+.stat b { font: 600 16px var(--mono); }
+.stat.bad b { color: var(--bad); }
+.stat.ok b { color: var(--ok); }
+.hf.work .hh h3 { font-size: 14px; }
+.hf.work .to { color: var(--faint); font-size: 12.5px; }
+.why { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 10px; }
+.reason { display: inline-flex; font-size: 12.5px; padding: 3px 9px; border-radius: 6px; background: var(--sunken); color: var(--muted); }
+.reason.bad { background: var(--bad-weak); color: var(--bad); }
+.reason.warn { background: var(--warn-weak); color: var(--warn); }
+.hf .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; border-top: 1px solid var(--line); }
+.hf .meta > div { padding: 8px 16px; border-right: 1px solid var(--line); min-width: 0; }
+.hf .meta > div:last-child { border-right: 0; }
+.hf .meta dt { font-size: 11px; color: var(--faint); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+.hf .meta dd { margin: 2px 0 0; font: 13px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hf.work .sync { border-top: 1px solid var(--line); }
+.merged-list .mrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 7px 16px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .hf.card .hh svg { color: var(--accent); flex: none; }
 .frow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 2px 0; font-size: 13px; }
 .frow .mono { font-size: 12.5px; }

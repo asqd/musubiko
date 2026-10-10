@@ -8,6 +8,8 @@
 //! branch from the base (fresh from the server unless `--local`) and, with `--run`, creates it.
 //! `musubiko card BRANCH [PATH] [--base develop]` shows one branch against every base, with its
 //! own commits and files.
+//! `musubiko mine [PATH] [--base develop] [--author EMAIL]` shows someone's branches (yours by
+//! default): what stands in the way of each, and which are merged.
 //! `musubiko where QUERY [PATH]` finds commits and tells where each one is.
 //! `musubiko radar [PATH]` shows which hotfix commits are not on the develop side.
 //! `--json` prints exactly what the app receives.
@@ -43,6 +45,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut execute = false;
     let mut local = false;
     let mut push_new = false;
+    let mut author: Option<String> = None;
     while let Some(a) = args.next() {
         match a.as_str() {
             "--base" => base = args.next(),
@@ -52,6 +55,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "--run" => execute = true,
             "--local" => local = true,
             "--push" => push_new = true,
+            "--author" => author = args.next(),
             "--after" => {
                 after = match args.next().as_deref() {
                     Some("worktree") => After::Worktree,
@@ -340,6 +344,47 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 match (f.added, f.removed) {
                     (Some(a), Some(r)) => println!("  +{a:<5} -{r:<5} {}", f.path),
                     _ => println!("  бинарный     {}", f.path),
+                }
+            }
+        }
+        "mine" => {
+            let base = match base {
+                Some(b) => b,
+                None => repo.default_base()?,
+            };
+            let m = repo.my_branches(&base, author.as_deref())?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&m)?);
+                return Ok(());
+            }
+            println!("Ветки {} <{}>", m.author.name, m.author.email);
+            for (title, list) in [("Требуют внимания", &m.attention), ("В работе", &m.active)]
+            {
+                if list.is_empty() {
+                    continue;
+                }
+                println!("{title}:");
+                for w in list {
+                    println!(
+                        "  {:<44} {:<14} ↑{} ↓{}  {} коммитов, {} файлов +{} -{}",
+                        w.branch.name,
+                        status_word(&w.branch.status),
+                        w.branch.ahead,
+                        w.branch.behind,
+                        w.commit_count,
+                        w.files,
+                        w.added,
+                        w.removed
+                    );
+                    for a in &w.attention {
+                        println!("      ! {a:?}");
+                    }
+                }
+            }
+            if !m.merged.is_empty() {
+                println!("Слиты, можно удалить:");
+                for b in &m.merged {
+                    println!("  {}", b.name);
                 }
             }
         }

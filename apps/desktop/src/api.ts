@@ -108,6 +108,39 @@ export interface FileDiff {
   truncated: boolean;
 }
 
+export type Attention =
+  | { kind: "conflict"; files: string[] }
+  | { kind: "behind"; count: number }
+  | { kind: "unpushed"; count: number }
+  | { kind: "neverPushed" }
+  | { kind: "goneWithWork" }
+  | { kind: "quiet"; days: number }
+  | { kind: "unknown"; error: string };
+
+export interface WorkBranch {
+  branch: Branch;
+  commitCount: number;
+  started: number | null;
+  /** The newest own commits. */
+  recent: Commit[];
+  files: number;
+  added: number;
+  removed: number;
+  /** Empty when nothing stands in the way. */
+  attention: Attention[];
+}
+
+export interface MyBranches {
+  author: Person;
+  /** Everyone who has branches, most active first. */
+  owners: { person: Person; active: number }[];
+  attention: WorkBranch[];
+  active: WorkBranch[];
+  merged: Branch[];
+  behindAlert: number;
+  quietDays: number;
+}
+
 export interface FileStat {
   path: string;
   /** The old name when the file was renamed. */
@@ -377,6 +410,7 @@ export const api = {
   repoInfo: () => call<RepoInfo>("repo_info"),
   listBranches: (base: string) => call<Branch[]>("list_branches", { base }),
   branchCard: (name: string, base: string) => call<BranchCard>("branch_card", { name, base }),
+  myBranches: (base: string, author: string | null) => call<MyBranches>("my_branches", { base, author }),
   branchDiff: (branch: string, base: string, ignoreWhitespace: boolean) =>
     call<BranchDiff>("branch_diff", { branch, base, ignoreWhitespace }),
   commitDiff: (hash: string, ignoreWhitespace: boolean) => call<FileDiff[]>("commit_diff", { hash, ignoreWhitespace }),

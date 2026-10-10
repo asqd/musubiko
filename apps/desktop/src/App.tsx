@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { api, Branch, copyReport, errorText, Radar as RadarData, RepoInfo, Settings } from "./api";
+import { api, Branch, copyReport, errorText, MyBranches as MyData, Radar as RadarData, RepoInfo, Settings } from "./api";
 import Welcome from "./components/Welcome";
 import Branches from "./components/Branches";
 import TopBar from "./components/TopBar";
@@ -9,12 +9,13 @@ import DiffView from "./diff/DiffView";
 import HotfixDialog from "./components/HotfixDialog";
 import NewBranchDialog from "./components/NewBranchDialog";
 import BranchCard from "./components/BranchCard";
+import MyBranches from "./components/MyBranches";
 import Journal from "./components/Journal";
 import Radar, { hasDevelop, needsAttention, pairState } from "./components/Radar";
 import Locate from "./components/Locate";
 import CheckoutDialog from "./components/CheckoutDialog";
 import Palette, { Command } from "./palette/Palette";
-import { BranchIcon, CardIcon, FlameIcon, LogIcon, SearchIcon } from "./components/Icons";
+import { BranchIcon, CardIcon, FlameIcon, LogIcon, SearchIcon, UserIcon } from "./components/Icons";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { baseName, home, inFileManager, key } from "./platform";
 
@@ -28,7 +29,10 @@ export default function App() {
   const lastRefresh = useRef(0);
   const [diffOf, setDiffOf] = useState<{ branch: Branch; base: string } | null>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const [view, setView] = useState<"branches" | "card" | "hotfixes" | "find" | "journal">("branches");
+  const [view, setView] = useState<"branches" | "mine" | "card" | "hotfixes" | "find" | "journal">("branches");
+  const [mine, setMine] = useState<MyData | null>(null);
+  const [mineLoading, setMineLoading] = useState(false);
+  const [mineError, setMineError] = useState<string | null>(null);
   // The branch on the "branch card" page.
   const [cardOf, setCardOf] = useState<string | null>(null);
   const [findRequest, setFindRequest] = useState<{ query: string; n: number } | null>(null);
@@ -140,6 +144,30 @@ export default function App() {
       window.removeEventListener("keydown", onKey);
     };
   }, [refresh, pickFolder]);
+
+  // The user's own branches, kept fresh for the sidebar badge like the radar.
+  const mineBase = info ? listBase ?? info.bases.find((b) => b.role === "develop")?.name ?? info.flow.master : null;
+  useEffect(() => {
+    if (!info || !mineBase) return;
+    let live = true;
+    setMineLoading(true);
+    api
+      .myBranches(mineBase, null)
+      .then((m) => {
+        if (!live) return;
+        setMine(m);
+        setMineError(null);
+      })
+      .catch((e) => {
+        if (!live) return;
+        setMine(null);
+        setMineError(errorText(e));
+      })
+      .finally(() => live && setMineLoading(false));
+    return () => {
+      live = false;
+    };
+  }, [info?.root, tick, mineBase]);
 
   // The radar is cheap enough to keep fresh for the sidebar badge.
   useEffect(() => {
@@ -312,6 +340,13 @@ export default function App() {
           run: () => void api.logPath().then((p) => (p ? revealItemInDir(p) : undefined)).catch(() => undefined),
         },
         { id: "view:branches", group: "Разделы", label: "Ветки", run: () => go("branches") },
+        {
+          id: "view:mine",
+          group: "Разделы",
+          label: "Мои ветки",
+          hint: mine?.attention.length ? `требуют внимания: ${mine.attention.length}` : undefined,
+          run: () => go("mine"),
+        },
         { id: "view:card", group: "Разделы", label: "Карточка ветки", run: () => go("card") },
         {
           id: "view:hotfixes",
@@ -381,13 +416,14 @@ export default function App() {
         {(
           [
             ["branches", <BranchIcon />, "Ветки"],
+            ["mine", <UserIcon />, "Мои ветки"],
             ["card", <CardIcon />, "Карточка ветки"],
             ["hotfixes", <FlameIcon />, "Хотфиксы"],
             ["find", <SearchIcon />, "Где коммит?"],
             ["journal", <LogIcon />, "Журнал"],
           ] as const
         ).map(([v, icon, label]) => {
-          const badge = v === "hotfixes" ? needsAttention(radar) : 0;
+          const badge = v === "hotfixes" ? needsAttention(radar) : v === "mine" ? mine?.attention.length ?? 0 : 0;
           return (
             <button
               key={v}
@@ -465,6 +501,22 @@ export default function App() {
             onHotfix={() => setHotfixOpen(true)}
             onDiff={(b) => openDiff(b, b.target)}
             onFind={findCommit}
+            onChanged={refresh}
+          />
+        </div>
+        <div hidden={!!diffOf || view !== "mine"}>
+          <MyBranches
+            info={info}
+            mine={mine}
+            loading={mineLoading}
+            error={mineError}
+            base={mineBase ?? info.flow.master}
+            tick={tick}
+            onDiff={openDiff}
+            onCard={openCard}
+            onCheckout={setCheckoutOf}
+            onFind={findCommit}
+            onNewBranch={() => setNewBranchOpen(true)}
             onChanged={refresh}
           />
         </div>
