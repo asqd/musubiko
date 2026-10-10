@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { RepoInfo, Settings } from "../api";
 import { ago, fullDate, plural } from "../format";
-import { BranchIcon, DownloadIcon, FlameIcon, Logo, RefreshIcon, SearchIcon } from "./Icons";
+import { BranchIcon, DownloadIcon, FlameIcon, Logo, PlusIcon, RefreshIcon, SearchIcon } from "./Icons";
 import { key } from "../platform";
 import { hasDevelop } from "./Radar";
 
@@ -9,6 +9,7 @@ interface Props {
   info: RepoInfo;
   onRefresh: () => Promise<void>;
   onHotfix: () => void;
+  onNewBranch: () => void;
   onFetch: () => void;
   fetching: boolean;
   onPalette: () => void;
@@ -30,6 +31,7 @@ export default function TopBar({
   info,
   onRefresh,
   onHotfix,
+  onNewBranch,
   onFetch,
   fetching,
   onPalette,
@@ -158,6 +160,10 @@ export default function TopBar({
       <button className="btn ghost" onClick={onPalette} title="Палитра команд">
         <SearchIcon />
         <kbd>{key("K")}</kbd>
+      </button>
+      <button className="btn" onClick={onNewBranch} title={`Новая ветка от выбранной базы (${key("N")})`}>
+        <PlusIcon />
+        Новая ветка
       </button>
       <button className="btn hot" onClick={onHotfix} title={
           hasDevelop(info)

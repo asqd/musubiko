@@ -83,9 +83,11 @@ interface Props {
   onCheckout: (branch: Branch) => void;
   /** The loaded list, for the command palette. */
   onList?: (list: Branch[]) => void;
+  /** The base the list is compared with, for "new branch" to start from. */
+  onBase?: (base: string) => void;
 }
 
-export default function Branches({ info, tick, active, onOpen, onChanged, onCheckout, onList }: Props) {
+export default function Branches({ info, tick, active, onOpen, onChanged, onCheckout, onList, onBase }: Props) {
   const baseNames = info.bases.map((b) => b.name);
   const defaultBase = info.bases.find((b) => b.role === "develop")?.name ?? baseNames[0] ?? info.flow.master;
   const [base, setBase] = useState(defaultBase);
@@ -105,6 +107,7 @@ export default function Branches({ info, tick, active, onOpen, onChanged, onChec
   // Another repository starts from its own default base; a picked branch belongs to this one.
   useEffect(() => setBase(defaultBase), [info.root]);
   const customBase = !baseNames.includes(base);
+  useEffect(() => onBase?.(base), [base]);
 
   useEffect(() => {
     const id = ++request.current;

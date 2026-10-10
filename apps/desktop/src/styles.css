@@ -141,6 +141,7 @@ button.chip:hover { border-color: var(--line-strong); background: var(--sunken);
 .basepick-btn .mono { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .basepick-btn.custom { border-color: var(--accent); color: var(--accent); }
 .basepick-btn .caret { color: var(--faint); font-size: 10px; }
+.basepick-pop.left { right: auto; left: 0; }
 .basepick-pop { position: absolute; top: calc(100% + 4px); right: 0; z-index: 30; width: min(380px, 80vw); background: var(--panel); border: 1px solid var(--line-strong); border-radius: 10px; box-shadow: var(--shadow); overflow: hidden; display: grid; }
 .basepick-pop input { width: 100%; border: 0; border-bottom: 1px solid var(--line); padding: 10px 12px; font-size: 14px; outline: 0; background: none; color: inherit; }
 .basepick-pop ul { list-style: none; margin: 0; padding: 4px; max-height: min(360px, 55vh); overflow: auto; }
@@ -334,8 +335,8 @@ tr.gap button:hover { background: var(--accent-weak); }
 .dlg footer { display: flex; gap: 8px; justify-content: flex-end; align-items: center; padding: 12px 18px; border-top: 1px solid var(--line); flex-wrap: wrap; }
 .hint-left { margin-right: auto; }
 .field .l { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; }
-.field input { width: 100%; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel); font: 14px var(--mono); }
-.field input:focus { outline: 0; border-color: var(--hot); box-shadow: 0 0 0 3px var(--hot-weak); }
+.field > input { width: 100%; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 6px; background: var(--panel); font: 14px var(--mono); }
+.field > input:focus { outline: 0; border-color: var(--hot); box-shadow: 0 0 0 3px var(--hot-weak); }
 .hint { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
 .newb { display: grid; gap: 6px; }
 .nb { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--sunken); }
@@ -344,6 +345,13 @@ tr.gap button:hover { background: var(--accent-weak); }
 .nb .ic { grid-row: span 2; width: 26px; height: 26px; border-radius: 6px; display: grid; place-items: center; font: 600 11px var(--mono); }
 .nb .ic.m { background: var(--hot-weak); color: var(--hot); }
 .nb .ic.d { background: var(--accent-weak); color: var(--accent); }
+.nb .ic.n { background: var(--accent-weak); color: var(--accent); }
+.nb-prefixes { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-top: 6px; }
+.nb-prefixes .chip { font: 12.5px var(--mono); padding: 2px 8px; color: var(--muted); }
+.nb-prefixes .chip.on { border-color: var(--accent); color: var(--accent); background: var(--accent-weak); }
+.nb-prefixes .hint { margin: 0 0 0 4px; }
+.nb-base { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.nb-base .basepick-btn { max-width: 320px; }
 .opt { display: flex; gap: 9px; align-items: flex-start; font-size: 13.5px; }
 .opt input { margin-top: 3px; }
 .after { display: grid; gap: 8px; }

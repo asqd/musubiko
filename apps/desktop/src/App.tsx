@@ -7,6 +7,7 @@ import Branches from "./components/Branches";
 import TopBar from "./components/TopBar";
 import DiffView from "./diff/DiffView";
 import HotfixDialog from "./components/HotfixDialog";
+import NewBranchDialog from "./components/NewBranchDialog";
 import Journal from "./components/Journal";
 import Radar, { hasDevelop, needsAttention, pairState } from "./components/Radar";
 import Locate from "./components/Locate";
@@ -32,6 +33,9 @@ export default function App() {
   const [radarError, setRadarError] = useState<string | null>(null);
   const [radarLoading, setRadarLoading] = useState(false);
   const [hotfixOpen, setHotfixOpen] = useState(false);
+  const [newBranchOpen, setNewBranchOpen] = useState(false);
+  // The base the branch list compares with: a new branch starts from it.
+  const [listBase, setListBase] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
   const [checkoutOf, setCheckoutOf] = useState<Branch | null>(null);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -112,6 +116,11 @@ export default function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "r") {
         e.preventDefault();
         void refresh();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        if (!document.querySelector(".backdrop")) setNewBranchOpen(true);
+        return;
       }
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "o") {
         e.preventDefault();
@@ -229,6 +238,13 @@ export default function App() {
   const commands: Command[] = !info
     ? []
     : [
+        {
+          id: "act:new-branch",
+          group: "Действия",
+          label: "Новая ветка",
+          hint: <kbd>{key("N")}</kbd>,
+          run: () => setNewBranchOpen(true),
+        },
         { id: "act:hotfix", group: "Действия", label: "Новый hotfix", hint: hasDevelop(info) ? `${info.flow.master} + ${info.flow.develop}` : `от ${info.flow.master}`, run: () => setHotfixOpen(true) },
         ...(info.remote
           ? [{ id: "act:fetch", group: "Действия", label: "Получить с сервера", hint: "git fetch --prune", run: () => void fetchNow() }]
@@ -332,6 +348,7 @@ export default function App() {
         info={info}
         onRefresh={refresh}
         onHotfix={() => setHotfixOpen(true)}
+        onNewBranch={() => setNewBranchOpen(true)}
         onFetch={fetchNow}
         fetching={fetching}
         onPalette={() => setPaletteOpen(true)}
@@ -413,11 +430,12 @@ export default function App() {
           <Branches
             info={info}
             tick={tick}
-            active={!diffOf && view === "branches" && !hotfixOpen && !checkoutOf && !paletteOpen}
+            active={!diffOf && view === "branches" && !hotfixOpen && !newBranchOpen && !checkoutOf && !paletteOpen}
             onOpen={openDiff}
             onChanged={refresh}
             onCheckout={setCheckoutOf}
             onList={setBranchList}
+            onBase={setListBase}
           />
         </div>
         <div hidden={!!diffOf || view !== "hotfixes"}>
@@ -445,6 +463,15 @@ export default function App() {
         <CheckoutDialog info={info} branch={checkoutOf} onClose={() => setCheckoutOf(null)} onChanged={refresh} />
       )}
       {hotfixOpen && <HotfixDialog info={info} onClose={() => setHotfixOpen(false)} onChanged={refresh} />}
+      {newBranchOpen && (
+        <NewBranchDialog
+          info={info}
+          base={listBase ?? info.bases.find((b) => b.role === "develop")?.name ?? info.flow.master}
+          branches={branchList}
+          onClose={() => setNewBranchOpen(false)}
+          onChanged={refresh}
+        />
+      )}
     </div>
   );
 }

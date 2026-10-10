@@ -4,6 +4,8 @@
 //! `musubiko conflicts BRANCH [PATH]` prints where merging into the base would conflict.
 //! `musubiko hotfix NAME [PATH] [--after worktree|switch|stay] [--no-push] [--run]` plans a hotfix
 //! pair and, with `--run`, creates it.
+//! `musubiko new NAME [PATH] [--base develop] [--local] [--push] [--after …] [--run]` plans a new
+//! branch from the base (fresh from the server unless `--local`) and, with `--run`, creates it.
 //! `musubiko where QUERY [PATH]` finds commits and tells where each one is.
 //! `musubiko radar [PATH]` shows which hotfix commits are not on the develop side.
 //! `--json` prints exactly what the app receives.
@@ -12,7 +14,9 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use musubiko_core::{After, Git, HotfixInput, Location, OpStatus, Repo, Status, StepState};
+use musubiko_core::{
+    After, Git, HotfixInput, Location, NewBranchInput, OpStatus, Repo, Status, StepState,
+};
 
 fn main() -> ExitCode {
     match run() {
@@ -35,6 +39,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut after = After::Stay;
     let mut push = true;
     let mut execute = false;
+    let mut local = false;
+    let mut push_new = false;
     while let Some(a) = args.next() {
         match a.as_str() {
             "--base" => base = args.next(),
@@ -42,6 +48,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             "-w" => ignore_ws = true,
             "--no-push" => push = false,
             "--run" => execute = true,
+            "--local" => local = true,
+            "--push" => push_new = true,
             "--after" => {
                 after = match args.next().as_deref() {
                     Some("worktree") => After::Worktree,
@@ -49,8 +57,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     _ => After::Stay,
                 }
             }
-            _ if matches!(cmd.as_str(), "diff" | "conflicts" | "hotfix" | "where")
-                && branch.is_none() =>
+            _ if matches!(
+                cmd.as_str(),
+                "diff" | "conflicts" | "hotfix" | "new" | "where"
+            ) && branch.is_none() =>
             {
                 branch = Some(a)
             }
@@ -237,6 +247,52 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 return Ok(());
             }
             let mut op = repo.start_hotfix(&input)?;
+            while op.status == OpStatus::Running {
+                let i = op.cursor();
+                op.step(&repo);
+                match &op.states[i] {
+                    StepState::Done { .. } => println!("✓ {}", op.steps[i].command()),
+                    StepState::Failed { error } => {
+                        println!("✗ {}\n  {error}", op.steps[i].command())
+                    }
+                    StepState::Pending => {}
+                }
+            }
+            if op.status != OpStatus::Done {
+                return Err("остановился; сделанное не откатывал".into());
+            }
+        }
+        "new" => {
+            let input = NewBranchInput {
+                name: branch.ok_or("укажите название: musubiko new NAME [PATH]")?,
+                base: match base {
+                    Some(b) => b,
+                    None => repo.default_base()?,
+                },
+                fresh: !local,
+                push: push_new,
+                after,
+            };
+            let plan = repo.plan_new_branch(&input)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&plan)?);
+                return Ok(());
+            }
+            println!("{} ← {}", plan.name, plan.from);
+            for w in &plan.warnings {
+                println!("· {w}");
+            }
+            for p in &plan.problems {
+                println!("! {p}");
+            }
+            if !execute {
+                for c in &plan.commands {
+                    println!("  $ {c}");
+                }
+                eprintln!("Это план. Чтобы выполнить, добавьте --run");
+                return Ok(());
+            }
+            let mut op = repo.start_new_branch(&input)?;
             while op.status == OpStatus::Running {
                 let i = op.cursor();
                 op.step(&repo);

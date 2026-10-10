@@ -139,6 +139,28 @@ export interface HotfixInput {
   after: After;
 }
 
+export interface NewBranchInput {
+  name: string;
+  base: string;
+  /** From the server's copy of the base, fetched first; otherwise from the local base. */
+  fresh: boolean;
+  push: boolean;
+  after: After;
+}
+
+export interface NewBranchPlan {
+  name: string;
+  from: string;
+  /** The base is both local and on the server, so "fresh" is a real choice. */
+  canFresh: boolean;
+  worktreePath: string | null;
+  canPush: boolean;
+  steps: Step[];
+  commands: string[];
+  problems: string[];
+  warnings: string[];
+}
+
 export interface Step {
   title: string;
   args: string[];
@@ -338,6 +360,8 @@ export const api = {
   conflicts: (branch: string, base: string) => call<ConflictFile[]>("conflicts", { branch, base }),
   planHotfix: (input: HotfixInput) => call<HotfixPlan>("plan_hotfix", { input }),
   startHotfix: (input: HotfixInput) => call<Operation>("start_hotfix", { input }),
+  planNewBranch: (input: NewBranchInput) => call<NewBranchPlan>("plan_new_branch", { input }),
+  startNewBranch: (input: NewBranchInput) => call<Operation>("start_new_branch", { input }),
   radar: () => call<Radar>("hotfix_radar"),
   planPort: (input: PortInput) => call<OpPlan>("plan_port", { input }),
   startPort: (input: PortInput) => call<Operation>("start_port", { input }),

@@ -458,6 +458,6 @@ fn plural(n: usize, one: &'static str, few: &'static str, many: &'static str) ->
     }
 }
 
-fn plural_commits(n: usize) -> &'static str {
+pub(crate) fn plural_commits(n: usize) -> &'static str {
     plural(n, "коммит", "коммита", "коммитов")
 }

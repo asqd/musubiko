@@ -13,8 +13,8 @@ use std::sync::Mutex;
 
 use musubiko_core::{
     Branch, BranchDiff, CheckoutInput, CheckoutPlan, CommitSearch, ConflictFile, DeleteInput,
-    FileDiff, Git, HotfixInput, HotfixPlan, OpPlan, OpStatus, Operation, PickState, PortInput,
-    Radar, Repo, RepoInfo, Side,
+    FileDiff, Git, HotfixInput, HotfixPlan, NewBranchInput, NewBranchPlan, OpPlan, OpStatus,
+    Operation, PickState, PortInput, Radar, Repo, RepoInfo, Side,
 };
 use tauri::{AppHandle, State};
 
@@ -161,6 +161,24 @@ async fn start_hotfix(
     state: State<'_, AppState>,
 ) -> Result<Operation, String> {
     start_op(&app, &state, move |repo| repo.start_hotfix(&input)).await
+}
+
+#[tauri::command]
+async fn plan_new_branch(
+    input: NewBranchInput,
+    state: State<'_, AppState>,
+) -> Result<NewBranchPlan, String> {
+    let repo = state.repo()?;
+    blocking(move || repo.plan_new_branch(&input)).await
+}
+
+#[tauri::command]
+async fn start_new_branch(
+    input: NewBranchInput,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Operation, String> {
+    start_op(&app, &state, move |repo| repo.start_new_branch(&input)).await
 }
 
 #[tauri::command]
@@ -463,6 +481,8 @@ fn main() {
             conflicts,
             plan_hotfix,
             start_hotfix,
+            plan_new_branch,
+            start_new_branch,
             hotfix_radar,
             plan_port,
             start_port,

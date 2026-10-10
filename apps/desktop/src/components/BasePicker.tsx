@@ -11,6 +11,10 @@ interface Props {
   /** Folder of the repository, to remember recent picks per repository. */
   root: string;
   onChange: (name: string) => void;
+  /** Which edge of the button the list lines up with. */
+  align?: "left" | "right";
+  /** Tooltip of the button. */
+  title?: string;
 }
 
 interface Item {
@@ -45,7 +49,7 @@ function remember(root: string, name: string) {
 }
 
 /** "Compare with": the bases first, then any branch, found by typing part of its name. */
-export default function BasePicker({ value, bases, branches, root, onChange }: Props) {
+export default function BasePicker({ value, bases, branches, root, onChange, align = "right", title }: Props) {
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -121,13 +125,13 @@ export default function BasePicker({ value, bases, branches, root, onChange }: P
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="listbox"
         aria-expanded={open}
-        title={`Сравнивать с ${value}. Можно выбрать любую ветку`}
+        title={title ?? `Сравнивать с ${value}. Можно выбрать любую ветку`}
       >
         <span className="mono ell">{value}</span>
         <span className="caret">▾</span>
       </button>
       {open && (
-        <div className="basepick-pop" role="dialog" aria-label="Сравнивать с веткой">
+        <div className={`basepick-pop ${align}`} role="dialog" aria-label="Сравнивать с веткой">
           <input
             autoFocus
             value={q}

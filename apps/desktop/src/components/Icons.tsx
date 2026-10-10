@@ -4,6 +4,9 @@ const base = { width: 14, height: 14, viewBox: "0 0 16 16", fill: "none", stroke
 export const BranchIcon = () => (
   <svg {...base}><circle cx="4" cy="3.5" r="1.8" /><circle cx="4" cy="12.5" r="1.8" /><circle cx="12" cy="5" r="1.8" /><path d="M4 5.3v5.4M12 6.8c0 3-3 3.2-6.4 4.6" /></svg>
 );
+export const PlusIcon = () => (
+  <svg {...base} strokeWidth={1.8}><path d="M8 3v10M3 8h10" /></svg>
+);
 export const SearchIcon = () => (
   <svg {...base} strokeWidth={1.7}><circle cx="7" cy="7" r="4.5" /><path d="m10.5 10.5 3.5 3.5" /></svg>
 );
