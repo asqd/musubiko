@@ -65,8 +65,9 @@ pub struct Branch {
 }
 
 impl Repo {
-    /// All branches except the two bases, newest first, each compared with its target:
-    /// `base` for ordinary branches, the fixed base for hotfix halves.
+    /// All branches except the two bases and `base`, newest first, each compared with its
+    /// target: `base` for ordinary branches, the fixed base for hotfix halves. `base` can be
+    /// any branch, not only master or develop.
     pub fn branches(&self, base: &str) -> Result<Vec<Branch>> {
         Ok(self.branches_with_stats(base)?.0)
     }
@@ -126,7 +127,7 @@ impl Repo {
             .unwrap_or_default();
         let list: Vec<(&String, &Refs)> = refs
             .iter()
-            .filter(|(n, _)| !self.flow.is_base(n) && keep(n))
+            .filter(|(n, _)| !self.flow.is_base(n) && n.as_str() != base && keep(n))
             .collect();
         let computed: Vec<Computed> = list
             .par_iter()

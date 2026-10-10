@@ -4,6 +4,7 @@ import { ago, copyText, fullDate, plural } from "../format";
 import { CopyIcon, SearchIcon, SwitchIcon, TrashIcon } from "./Icons";
 import { DeleteDialog } from "./OpDialogs";
 import { ErrorBanner } from "./ErrorBanner";
+import BasePicker from "./BasePicker";
 
 type Filter = "all" | "open" | "merged" | "gone" | "conflict" | "stale" | "unpushed";
 
@@ -101,9 +102,9 @@ export default function Branches({ info, tick, active, onOpen, onChanged, onChec
   const searchRef = useRef<HTMLInputElement>(null);
   const request = useRef(0);
 
-  useEffect(() => {
-    if (!baseNames.includes(base)) setBase(defaultBase);
-  }, [info.root]);
+  // Another repository starts from its own default base; a picked branch belongs to this one.
+  useEffect(() => setBase(defaultBase), [info.root]);
+  const customBase = !baseNames.includes(base);
 
   useEffect(() => {
     const id = ++request.current;
@@ -213,18 +214,14 @@ export default function Branches({ info, tick, active, onOpen, onChanged, onChec
           </span>
         )}
         <span className="sp" />
-        {baseNames.length > 1 && (
-          <>
-            <span className="lbl">Сравнивать с</span>
-            <div className="seg" role="group" aria-label="Базовая ветка">
-              {baseNames.map((n) => (
-                <button key={n} className={base === n ? "on" : ""} onClick={() => setBase(n)}>
-                  {n}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
+        <span className="lbl">Сравнивать с</span>
+        <BasePicker
+          value={base}
+          bases={baseNames}
+          branches={(list ?? []).map((b) => b.name)}
+          root={info.root}
+          onChange={setBase}
+        />
         <label className="search">
           <SearchIcon />
           <input
@@ -255,6 +252,17 @@ export default function Branches({ info, tick, active, onOpen, onChanged, onChec
             )}
           </div>
         ))}
+        {customBase && (
+          <div className="base cur custom">
+            <b title={base}>{base}</b>
+            <span className="muted ell" title="Если ветка есть локально, сравнение идёт с локальной версией, иначе — с серверной">
+              своя база
+            </span>
+            <button className="btn sm ghost" onClick={() => setBase(defaultBase)}>
+              Вернуть {defaultBase}
+            </button>
+          </div>
+        )}
         {info.bases.length === 0 && <div className="banner">Не нашёл ни master/main, ни develop: статусы считать не с чем.</div>}
       </div>
 

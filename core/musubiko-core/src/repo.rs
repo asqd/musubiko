@@ -294,8 +294,12 @@ impl Repo {
     }
 
     /// Full ref for a base branch: the remote-tracking one first, since that is what was merged
-    /// on the server; the local branch only when there is no remote copy.
+    /// on the server; the local branch only when there is no remote copy. Any other branch
+    /// picked as a base is taken as the user has it, like a work branch.
     pub(crate) fn base_ref(&self, name: &str, refs: &BTreeMap<String, Refs>) -> Option<String> {
+        if !self.flow.is_base(name) {
+            return self.branch_ref(name, refs);
+        }
         let r = refs.get(name)?;
         match (&r.remote, &self.remote) {
             (Some(_), Some(remote)) => Some(format!("refs/remotes/{remote}/{name}")),

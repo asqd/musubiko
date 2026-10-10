@@ -2,7 +2,7 @@
 
 mod common;
 
-use common::{Fixture, flow_fixture};
+use common::{Fixture, flow_fixture, with_origin};
 use musubiko_core::{Branch, Location, Status, Sync};
 
 fn find<'a>(list: &'a [Branch], name: &str) -> &'a Branch {
@@ -153,4 +153,29 @@ fn main_stands_in_for_master() {
     let info = f.repo().info().unwrap();
     assert_eq!(info.flow.master, "main");
     assert_eq!(info.bases.len(), 2);
+}
+
+#[test]
+fn any_branch_can_be_the_base() {
+    let f = with_origin();
+    f.git(&["checkout", "-q", "-b", "feature/base", "develop"]);
+    f.commit("a.txt", "a\n", "base work");
+    f.git(&["push", "-q", "origin", "feature/base"]);
+    // A local commit the server has not seen yet: the base is taken as the user has it.
+    f.commit("b.txt", "b\n", "unpushed base work");
+    f.git(&["checkout", "-q", "-b", "feature/on-top"]);
+    f.git(&["checkout", "-q", "-b", "feature/more"]);
+    f.commit("c.txt", "c\n", "more");
+
+    let list = f.repo().branches("feature/base").unwrap();
+    let get = |n: &str| list.iter().find(|b| b.name == n);
+    assert!(
+        get("feature/base").is_none(),
+        "the base is not compared with itself"
+    );
+    let on_top = get("feature/on-top").unwrap();
+    assert_eq!(on_top.target, "feature/base");
+    assert_eq!(on_top.status, Status::Merged);
+    let more = get("feature/more").unwrap();
+    assert_eq!((more.status.clone(), more.ahead), (Status::Open, 1));
 }
