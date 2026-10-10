@@ -105,10 +105,57 @@ impl Repo {
             flow: Flow::default(),
         };
         let refs = repo.refs()?;
-        if !refs.contains_key(&repo.flow.master) && refs.contains_key("main") {
-            repo.flow.master = "main".into();
-        }
+        repo.flow.master = repo.pick_master(&refs);
         Ok(repo)
+    }
+
+    /// `master` or `main`. With only one of them it is that one. With both (a repository that
+    /// moved to `main` and kept the old branch, or the other way round) it is the server's
+    /// default branch, then the one the server has, then the one with the newer tip.
+    fn pick_master(&self, refs: &BTreeMap<String, Refs>) -> String {
+        const NAMES: [&str; 2] = ["master", "main"];
+        let present: Vec<&str> = NAMES
+            .into_iter()
+            .filter(|n| refs.contains_key(*n))
+            .collect();
+        match present[..] {
+            [] => return NAMES[0].into(),
+            [one] => return one.into(),
+            _ => {}
+        }
+        if let Some(remote) = &self.remote {
+            let head = self
+                .run(&[
+                    "symbolic-ref",
+                    "-q",
+                    "--short",
+                    &format!("refs/remotes/{remote}/HEAD"),
+                ])
+                .unwrap_or_default();
+            let default = head
+                .trim()
+                .strip_prefix(&format!("{remote}/"))
+                .unwrap_or("");
+            if let Some(n) = NAMES.into_iter().find(|n| *n == default) {
+                return n.into();
+            }
+        }
+        let on_server: Vec<&str> = NAMES
+            .into_iter()
+            .filter(|n| refs[*n].remote.is_some())
+            .collect();
+        if let [one] = on_server[..] {
+            return one.into();
+        }
+        let tip = |n: &str| {
+            let r = &refs[n];
+            r.remote.as_ref().or(r.local.as_ref()).map_or(0, |c| c.date)
+        };
+        if tip("main") > tip("master") {
+            "main".into()
+        } else {
+            "master".into()
+        }
     }
 
     pub fn root(&self) -> &Path {

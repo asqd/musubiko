@@ -158,7 +158,7 @@ export default function TopBar({
         <SearchIcon />
         <kbd>{key("K")}</kbd>
       </button>
-      <button className="btn hot" onClick={onHotfix} title="hotfix/… от master и hotfix/…-dev от develop">
+      <button className="btn hot" onClick={onHotfix} title={`${info.flow.hotfixPrefix}… от ${info.flow.master} и ${info.flow.hotfixPrefix}…${info.flow.devSuffix} от ${info.flow.develop}`}>
         <FlameIcon />
         Новый hotfix
       </button>

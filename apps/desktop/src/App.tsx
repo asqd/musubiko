@@ -8,7 +8,7 @@ import TopBar from "./components/TopBar";
 import DiffView from "./diff/DiffView";
 import HotfixDialog from "./components/HotfixDialog";
 import Journal from "./components/Journal";
-import Radar, { needsAttention } from "./components/Radar";
+import Radar, { needsAttention, pairState } from "./components/Radar";
 import Locate from "./components/Locate";
 import CheckoutDialog from "./components/CheckoutDialog";
 import Palette, { Command } from "./palette/Palette";
@@ -226,19 +226,10 @@ export default function App() {
     setView(v);
     setDiffOf(null);
   };
-  const PAIR_HINT: Record<string, string> = {
-    lost: "в master, но не в develop",
-    noDev: "нет -dev ветки",
-    unsynced: "не всё перенесено",
-    work: "в работе",
-    released: "ждёт develop",
-    empty: "коммитов нет",
-    done: "завершён",
-  };
   const commands: Command[] = !info
     ? []
     : [
-        { id: "act:hotfix", group: "Действия", label: "Новый hotfix", hint: "master + develop", run: () => setHotfixOpen(true) },
+        { id: "act:hotfix", group: "Действия", label: "Новый hotfix", hint: `${info.flow.master} + ${info.flow.develop}`, run: () => setHotfixOpen(true) },
         ...(info.remote
           ? [{ id: "act:fetch", group: "Действия", label: "Получить с сервера", hint: "git fetch --prune", run: () => void fetchNow() }]
           : []),
@@ -305,7 +296,7 @@ export default function App() {
           group: "Хотфиксы",
           label: p.slug,
           mono: true,
-          hint: PAIR_HINT[p.state],
+          hint: pairState(p.state, info.flow)[0],
           run: () => go("hotfixes"),
         })),
         ...recent

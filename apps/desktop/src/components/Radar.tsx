@@ -1,20 +1,31 @@
 import { useState } from "react";
-import { Branch, Commit, HotfixPair, PairState, Radar as RadarData, RepoInfo } from "../api";
+import { Branch, Commit, Flow, HotfixPair, PairState, Radar as RadarData, RepoInfo } from "../api";
 import { ago, fullDate, plural } from "../format";
 import { StatusPill } from "./Branches";
 import { DeleteDialog, PortDialog } from "./OpDialogs";
 import { FlameIcon } from "./Icons";
 import { ErrorBanner } from "./ErrorBanner";
 
-const STATE: Record<PairState, [string, string]> = {
-  lost: ["в master, но не в develop", "bad"],
-  noDev: ["нет -dev ветки", "bad"],
-  unsynced: ["не всё перенесено", "warn"],
-  work: ["в работе", "hot"],
-  released: ["в master, ждёт develop", "open"],
-  empty: ["коммитов пока нет", "mute"],
-  done: ["завершён", "ok"],
-};
+/** A pair's state as a label and a pill class, with the repository's own base names. */
+export function pairState(state: PairState, flow: Flow): [string, string] {
+  const { master, develop, devSuffix } = flow;
+  switch (state) {
+    case "lost":
+      return [`в ${master}, но не в ${develop}`, "bad"];
+    case "noDev":
+      return [`нет ${devSuffix} ветки`, "bad"];
+    case "unsynced":
+      return ["не всё перенесено", "warn"];
+    case "work":
+      return ["в работе", "hot"];
+    case "released":
+      return [`в ${master}, ждёт ${develop}`, "open"];
+    case "empty":
+      return ["коммитов пока нет", "mute"];
+    case "done":
+      return ["завершён", "ok"];
+  }
+}
 const ATTENTION: PairState[] = ["lost", "noDev", "unsynced"];
 
 export const needsAttention = (r: RadarData | null) =>
@@ -214,7 +225,7 @@ function PairCard({
   onFind: (hash: string) => void;
   onDialog: (d: Dialog) => void;
 }) {
-  const [label, cls] = STATE[p.state];
+  const [label, cls] = pairState(p.state, info.flow);
   const missing = p.commits.filter((c) => !c.ported).map((c) => c.commit);
   const newest = [p.master, p.dev].filter(Boolean).map((b) => b!.tip.date);
   const owner = p.master?.owner.name ?? p.dev?.owner.name;
@@ -235,7 +246,7 @@ function PairCard({
       </div>
       {p.commits.length > 0 && (
         <div className="sync">
-          <h4>Коммиты master-части → develop-сторона</h4>
+          <h4>Коммиты {info.flow.master}-части → {info.flow.develop}-сторона</h4>
           {p.commits.map(({ commit: c, ported }) => (
             <div key={c.hash} className="srow">
               <button className="hash" onClick={() => onFind(c.hash)} title="Где этот коммит?">
