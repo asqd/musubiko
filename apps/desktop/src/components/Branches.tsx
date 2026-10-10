@@ -236,24 +236,29 @@ export default function Branches({ info, tick, active, onOpen, onChanged, onChec
         </label>
       </div>
 
+      {/* Only the base the list is compared with: the other ones say nothing about these statuses. */}
       <div className="bases">
-        {info.bases.map((b) => (
-          <div key={b.name} className={`base ${b.name === base ? "cur" : ""}`}>
-            <b>{b.refName}</b>
-            <button className="hash" onClick={() => copy(b.tip.hash)} title="Скопировать хэш">
-              {b.tip.short}
-            </button>
-            <span className="muted ell">{b.tip.subject}</span>
-            <span className="faint small" title={fullDate(b.tip.date)}>{ago(b.tip.date)}</span>
-            {b.sync && b.sync.behind > 0 && (
-              <span className="pill warn" title={`Локальный ${b.name} отстаёт от ${b.refName}`}>
-                локальный отстаёт на {b.sync.behind}
+        {info.bases
+          .filter((b) => b.name === base)
+          .map((b) => (
+            <div key={b.name} className="base">
+              <b>{b.refName}</b>
+              <button className="hash" onClick={() => copy(b.tip.hash)} title="Скопировать хэш">
+                {b.tip.short}
+              </button>
+              <span className="muted ell">{b.tip.subject}</span>
+              <span className="faint small" title={fullDate(b.tip.date)}>
+                {ago(b.tip.date)}
               </span>
-            )}
-          </div>
-        ))}
+              {b.sync && b.sync.behind > 0 && (
+                <span className="pill warn" title={`Локальный ${b.name} отстаёт от ${b.refName}`}>
+                  локальный отстаёт на {b.sync.behind}
+                </span>
+              )}
+            </div>
+          ))}
         {customBase && (
-          <div className="base cur custom">
+          <div className="base custom">
             <b title={base}>{base}</b>
             <span className="muted ell" title="Если ветка есть локально, сравнение идёт с локальной версией, иначе — с серверной">
               своя база

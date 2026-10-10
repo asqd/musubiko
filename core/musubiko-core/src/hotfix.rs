@@ -23,7 +23,7 @@ pub enum After {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HotfixInput {
-    /// As typed: "LT-4900 ошибка в ваучере" works.
+    /// As typed: "Project-4900 ошибка в документах" works.
     pub name: String,
     pub push: bool,
     pub after: After,
@@ -214,7 +214,7 @@ impl Repo {
         ))
     }
 
-    /// `~/work/booking-api` → `~/work/booking-api@LT-4900-voucher`.
+    /// `~/work/docs-api` → `~/work/docs-api@PROJECT-4900-oshibka-v-dokumentah`.
     pub(crate) fn worktree_path(&self, slug: &str) -> PathBuf {
         let name = self
             .root
@@ -225,8 +225,8 @@ impl Repo {
     }
 }
 
-/// "LT-4900 ошибка в ваучере" → "LT-4900-oshibka-v-vauchere". The ticket key keeps its case,
-/// the rest is transliterated, lowercased and joined with dashes.
+/// "Project-4900 ошибка в документах" → "PROJECT-4900-oshibka-v-dokumentah". The ticket key is
+/// upper-cased, as task keys are; the rest is transliterated, lowercased and joined with dashes.
 pub fn slugify(raw: &str, prefix: &str, dev_suffix: &str) -> String {
     let mut s = raw.trim();
     s = s.strip_prefix(prefix).unwrap_or(s);
@@ -320,6 +320,10 @@ mod tests {
             "LT-4900-oshibka-v-vauchere"
         );
         assert_eq!(slug("lt-4900"), "LT-4900");
+        assert_eq!(
+            slug("Project-4900 ошибка в документах"),
+            "PROJECT-4900-oshibka-v-dokumentah"
+        );
         assert_eq!(slug("  hotfix/LT-12 Fix  NPE!! "), "LT-12-fix-npe");
         assert_eq!(slug("LT-12-npe-dev"), "LT-12-npe");
         assert_eq!(

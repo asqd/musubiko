@@ -100,7 +100,7 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
                 ref={inputRef}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="LT-4900 ошибка в ваучере"
+                placeholder="Project-4900 ошибка в документах"
                 autoComplete="off"
                 spellCheck={false}
               />
