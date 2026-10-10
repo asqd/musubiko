@@ -71,6 +71,18 @@ jobs:
       - run: npx tauri build --target ${{ matrix.target }} --ci
         working-directory: apps/desktop
 
+      # A fresh Windows has no Visual C++ runtime: the app must not need its DLLs (.cargo/config.toml).
+      - name: Check the Windows app needs no Visual C++ runtime
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property installationPath
+          $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC" -Recurse -Filter dumpbin.exe |
+            Where-Object FullName -like "*Hostx64\x64*" | Select-Object -First 1
+          $deps = & $dumpbin.FullName /dependents "target/${{ matrix.target }}/release/musubiko-app.exe"
+          $deps
+          if ($deps -match "vcruntime|msvcp|ucrtbase|api-ms-win-crt") { throw "musubiko-app.exe still needs the Visual C++ runtime" }
+
       - uses: actions/upload-artifact@v4
         with:
           name: musubiko-${{ matrix.name }}

@@ -1,0 +1,4 @@
+# The Visual C++ runtime goes into the Windows executable itself, so the app starts on a machine
+# that never installed the Visual C++ Redistributable (otherwise: "vcruntime140_1.dll not found").
+[target.'cfg(all(windows, target_env = "msvc"))']
+rustflags = ["-C", "target-feature=+crt-static"]
