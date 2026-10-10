@@ -96,4 +96,5 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
-          files: dist/*
+          # Artifacts keep their bundle folders (dmg/, nsis/, deb/, appimage/).
+          files: dist/**/*
