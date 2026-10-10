@@ -15,6 +15,8 @@ interface Props {
   align?: "left" | "right";
   /** Tooltip of the button. */
   title?: string;
+  /** Where recent picks are kept: each picker remembers its own. */
+  memory?: string;
 }
 
 interface Item {
@@ -26,30 +28,27 @@ interface Item {
 const LIMIT = 60;
 const RECENT_KEPT = 5;
 
-function recentKey(root: string) {
-  return `musubiko.recentBases:${root}`;
-}
-
-function loadRecent(root: string): string[] {
+function loadRecent(key: string): string[] {
   try {
-    const v = JSON.parse(localStorage.getItem(recentKey(root)) ?? "[]");
+    const v = JSON.parse(localStorage.getItem(key) ?? "[]");
     return Array.isArray(v) ? v.filter((x) => typeof x === "string") : [];
   } catch {
     return [];
   }
 }
 
-function remember(root: string, name: string) {
+function remember(key: string, name: string) {
   try {
-    const list = [name, ...loadRecent(root).filter((n) => n !== name)].slice(0, RECENT_KEPT);
-    localStorage.setItem(recentKey(root), JSON.stringify(list));
+    const list = [name, ...loadRecent(key).filter((n) => n !== name)].slice(0, RECENT_KEPT);
+    localStorage.setItem(key, JSON.stringify(list));
   } catch {
     // Recent picks are a convenience; without storage the list just starts empty.
   }
 }
 
 /** "Compare with": the bases first, then any branch, found by typing part of its name. */
-export default function BasePicker({ value, bases, branches, root, onChange, align = "right", title }: Props) {
+export default function BasePicker({ value, bases, branches, root, onChange, align = "right", title, memory = "recentBases" }: Props) {
+  const recentKey = `musubiko.${memory}:${root}`;
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -60,7 +59,7 @@ export default function BasePicker({ value, bases, branches, root, onChange, ali
     if (!open) return [];
     const all = [...new Set([...bases, ...branches, value])];
     if (!q.trim()) {
-      const recent = loadRecent(root).filter((n) => all.includes(n) && !bases.includes(n));
+      const recent = loadRecent(recentKey).filter((n) => all.includes(n) && !bases.includes(n));
       const rest = branches.filter((n) => !bases.includes(n) && !recent.includes(n));
       return [
         ...bases.map((name) => ({ name, group: "Базовые", ranges: [] })),
@@ -77,7 +76,7 @@ export default function BasePicker({ value, bases, branches, root, onChange, ali
       .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
       .slice(0, LIMIT)
       .map(({ name, group, ranges }) => ({ name, group, ranges }));
-  }, [open, q, bases, branches, value, root]);
+  }, [open, q, bases, branches, value, recentKey]);
 
   useEffect(() => setCursor(0), [q, open]);
 
@@ -95,7 +94,7 @@ export default function BasePicker({ value, bases, branches, root, onChange, ali
   }, [cursor]);
 
   const pick = (name: string) => {
-    if (!bases.includes(name)) remember(root, name);
+    if (!bases.includes(name)) remember(recentKey, name);
     onChange(name);
     setOpen(false);
     setQ("");

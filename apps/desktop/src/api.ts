@@ -108,6 +108,29 @@ export interface FileDiff {
   truncated: boolean;
 }
 
+export interface FileStat {
+  path: string;
+  /** The old name when the file was renamed. */
+  oldPath: string | null;
+  /** null for binary files */
+  added: number | null;
+  removed: number | null;
+}
+
+export interface BranchCard {
+  /** Compared with its target: the chosen base, or the fixed one for hotfix halves. */
+  branch: Branch;
+  /** The same branch against master/main, develop and a custom chosen base. */
+  against: Branch[];
+  /** Own commits against the target, newest first. */
+  commits: Commit[];
+  commitCount: number;
+  /** Unix seconds of the oldest own commit. */
+  started: number | null;
+  files: FileStat[];
+  upstream: string | null;
+}
+
 export interface BranchDiff {
   branch: string;
   target: string;
@@ -353,6 +376,7 @@ export const api = {
   openRepo: (path: string) => call<RepoInfo>("open_repo", { path }),
   repoInfo: () => call<RepoInfo>("repo_info"),
   listBranches: (base: string) => call<Branch[]>("list_branches", { base }),
+  branchCard: (name: string, base: string) => call<BranchCard>("branch_card", { name, base }),
   branchDiff: (branch: string, base: string, ignoreWhitespace: boolean) =>
     call<BranchDiff>("branch_diff", { branch, base, ignoreWhitespace }),
   commitDiff: (hash: string, ignoreWhitespace: boolean) => call<FileDiff[]>("commit_diff", { hash, ignoreWhitespace }),

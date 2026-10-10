@@ -5,6 +5,7 @@
 
 mod branches;
 mod cache;
+mod card;
 mod checkout;
 mod diff;
 mod error;
@@ -21,6 +22,7 @@ mod repo;
 
 pub use branches::{Branch, Location, Status, Sync};
 pub use cache::CacheStats;
+pub use card::{BranchCard, FileStat};
 pub use checkout::{CheckoutInput, CheckoutMode, CheckoutPlan};
 pub use diff::{
     BranchDiff, ConflictFile, ConflictRegion, FileChange, FileDiff, Hunk, Line, LineKind,

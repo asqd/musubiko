@@ -8,12 +8,13 @@ import TopBar from "./components/TopBar";
 import DiffView from "./diff/DiffView";
 import HotfixDialog from "./components/HotfixDialog";
 import NewBranchDialog from "./components/NewBranchDialog";
+import BranchCard from "./components/BranchCard";
 import Journal from "./components/Journal";
 import Radar, { hasDevelop, needsAttention, pairState } from "./components/Radar";
 import Locate from "./components/Locate";
 import CheckoutDialog from "./components/CheckoutDialog";
 import Palette, { Command } from "./palette/Palette";
-import { BranchIcon, FlameIcon, LogIcon, SearchIcon } from "./components/Icons";
+import { BranchIcon, CardIcon, FlameIcon, LogIcon, SearchIcon } from "./components/Icons";
 import { ErrorBanner } from "./components/ErrorBanner";
 import { baseName, home, inFileManager, key } from "./platform";
 
@@ -27,13 +28,17 @@ export default function App() {
   const lastRefresh = useRef(0);
   const [diffOf, setDiffOf] = useState<{ branch: Branch; base: string } | null>(null);
   const mainRef = useRef<HTMLElement>(null);
-  const [view, setView] = useState<"branches" | "hotfixes" | "find" | "journal">("branches");
+  const [view, setView] = useState<"branches" | "card" | "hotfixes" | "find" | "journal">("branches");
+  // The branch on the "branch card" page.
+  const [cardOf, setCardOf] = useState<string | null>(null);
   const [findRequest, setFindRequest] = useState<{ query: string; n: number } | null>(null);
   const [radar, setRadar] = useState<RadarData | null>(null);
   const [radarError, setRadarError] = useState<string | null>(null);
   const [radarLoading, setRadarLoading] = useState(false);
   const [hotfixOpen, setHotfixOpen] = useState(false);
   const [newBranchOpen, setNewBranchOpen] = useState(false);
+  // "New branch from this one" on a card overrides the list's base.
+  const [newBranchBase, setNewBranchBase] = useState<string | null>(null);
   // The base the branch list compares with: a new branch starts from it.
   const [listBase, setListBase] = useState<string | null>(null);
   const [fetching, setFetching] = useState(false);
@@ -71,6 +76,7 @@ export default function App() {
       setInfo(await api.openRepo(path));
       setDiffOf(null);
       setView("branches");
+      setCardOf(null);
       setRecent(await api.recentRepos());
     } catch (e) {
       setError(errorText(e));
@@ -235,6 +241,14 @@ export default function App() {
     setView(v);
     setDiffOf(null);
   };
+  const openCard = (name: string) => {
+    setCardOf(name);
+    go("card");
+  };
+  const newBranchFrom = (base: string) => {
+    setNewBranchBase(base);
+    setNewBranchOpen(true);
+  };
   const commands: Command[] = !info
     ? []
     : [
@@ -298,6 +312,7 @@ export default function App() {
           run: () => void api.logPath().then((p) => (p ? revealItemInDir(p) : undefined)).catch(() => undefined),
         },
         { id: "view:branches", group: "Разделы", label: "Ветки", run: () => go("branches") },
+        { id: "view:card", group: "Разделы", label: "Карточка ветки", run: () => go("card") },
         {
           id: "view:hotfixes",
           group: "Разделы",
@@ -320,6 +335,7 @@ export default function App() {
           .map((p) => ({ id: "repo:" + p, group: "Репозитории", label: baseName(p), hint: home(p), run: () => void openPath(p) })),
         ...branchList.flatMap((b) => [
           { id: "diff:" + b.name, group: "Ветки", kind: "Дифф", label: b.name, mono: true, run: () => openDiff(b, b.target) },
+          { id: "card:" + b.name, group: "Ветки", kind: "Карточка", label: b.name, mono: true, run: () => openCard(b.name) },
           ...(b.isHead
             ? []
             : [{ id: "co:" + b.name, group: "Ветки", kind: "Checkout", label: b.name, mono: true, run: () => setCheckoutOf(b) }]),
@@ -365,6 +381,7 @@ export default function App() {
         {(
           [
             ["branches", <BranchIcon />, "Ветки"],
+            ["card", <CardIcon />, "Карточка ветки"],
             ["hotfixes", <FlameIcon />, "Хотфиксы"],
             ["find", <SearchIcon />, "Где коммит?"],
             ["journal", <LogIcon />, "Журнал"],
@@ -436,6 +453,7 @@ export default function App() {
             onCheckout={setCheckoutOf}
             onList={setBranchList}
             onBase={setListBase}
+            onCard={(b) => openCard(b.name)}
           />
         </div>
         <div hidden={!!diffOf || view !== "hotfixes"}>
@@ -447,6 +465,21 @@ export default function App() {
             onHotfix={() => setHotfixOpen(true)}
             onDiff={(b) => openDiff(b, b.target)}
             onFind={findCommit}
+            onChanged={refresh}
+          />
+        </div>
+        <div hidden={!!diffOf || view !== "card"}>
+          <BranchCard
+            info={info}
+            name={cardOf}
+            base={listBase ?? info.bases.find((b) => b.role === "develop")?.name ?? info.flow.master}
+            branches={branchList}
+            tick={tick}
+            onPick={setCardOf}
+            onDiff={openDiff}
+            onCheckout={setCheckoutOf}
+            onFind={findCommit}
+            onNewBranch={newBranchFrom}
             onChanged={refresh}
           />
         </div>
@@ -466,9 +499,12 @@ export default function App() {
       {newBranchOpen && (
         <NewBranchDialog
           info={info}
-          base={listBase ?? info.bases.find((b) => b.role === "develop")?.name ?? info.flow.master}
+          base={newBranchBase ?? listBase ?? info.bases.find((b) => b.role === "develop")?.name ?? info.flow.master}
           branches={branchList}
-          onClose={() => setNewBranchOpen(false)}
+          onClose={() => {
+            setNewBranchOpen(false);
+            setNewBranchBase(null);
+          }}
           onChanged={refresh}
         />
       )}

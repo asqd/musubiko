@@ -74,7 +74,7 @@ impl Repo {
 
     /// Like [`Repo::branches`], also telling how much came from the status cache.
     pub fn branches_with_stats(&self, base: &str) -> Result<(Vec<Branch>, CacheStats)> {
-        self.branches_where_stats(base, |_| true)
+        self.branches_where_stats(base, |_| true, true)
     }
 
     /// Like [`Repo::branches`], for the branches whose name passes `keep`.
@@ -83,13 +83,24 @@ impl Repo {
         base: &str,
         keep: impl Fn(&str) -> bool,
     ) -> Result<Vec<Branch>> {
-        Ok(self.branches_where_stats(base, keep)?.0)
+        Ok(self.branches_where_stats(base, keep, true)?.0)
     }
 
+    /// One branch compared with `base` itself, even a hotfix half that the list compares with its
+    /// fixed base. `None` when there is no such branch (or it is one of the bases).
+    pub(crate) fn branch_against(&self, name: &str, base: &str) -> Result<Option<Branch>> {
+        Ok(self
+            .branches_where_stats(base, |n| n == name, false)?
+            .0
+            .pop())
+    }
+
+    /// `fixed`: hotfix halves are compared with their own base instead of `base`.
     fn branches_where_stats(
         &self,
         base: &str,
         keep: impl Fn(&str) -> bool,
+        fixed: bool,
     ) -> Result<(Vec<Branch>, CacheStats)> {
         let refs = self.refs()?;
         let head = self
@@ -131,7 +142,14 @@ impl Repo {
             .collect();
         let computed: Vec<Computed> = list
             .par_iter()
-            .map(|(name, r)| self.branch(name, r, base, &targets, head.as_deref(), &cache))
+            .map(|(name, r)| {
+                let target = if fixed {
+                    self.flow.target_for(name, base)
+                } else {
+                    base
+                };
+                self.branch(name, r, target, &targets, head.as_deref(), &cache)
+            })
             .collect::<Result<_>>()?;
 
         let mut stats = CacheStats::default();
@@ -174,7 +192,7 @@ impl Repo {
         &self,
         name: &str,
         r: &Refs,
-        base: &str,
+        target: &str,
         targets: &HashMap<String, Option<Target>>,
         head: Option<&str>,
         cache: &StatusCache,
@@ -219,7 +237,7 @@ impl Repo {
             _ => None,
         };
 
-        let target = self.flow.target_for(name, base).to_string();
+        let target = target.to_string();
         let mut out = Branch {
             name: name.to_string(),
             owner: tip.author.clone(),

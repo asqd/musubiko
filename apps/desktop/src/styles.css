@@ -425,6 +425,12 @@ pre.cmds .pending { color: var(--faint); }
 .res { font: 12.5px var(--mono); white-space: nowrap; }
 .res.ok { color: var(--ok); }
 .res.no { color: var(--bad); }
+.ph .basepick-btn { max-width: min(460px, 60vw); }
+.hf.card .hh svg { color: var(--accent); flex: none; }
+.frow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 2px 0; font-size: 13px; }
+.frow .mono { font-size: 12.5px; }
+.sync .add, .frow .add { color: var(--ok); }
+.sync .del, .frow .del { color: var(--bad); }
 .hf .foot { display: flex; gap: 8px; flex-wrap: wrap; padding: 10px 16px; background: var(--sunken); border-top: 1px solid var(--line); align-items: center; }
 .clist-plain { list-style: none; margin: 0; padding: 8px 12px; background: var(--sunken); border-radius: 8px; display: grid; gap: 3px; font-size: 13px; max-height: 200px; overflow: auto; }
 .opts-row { display: flex; gap: 18px; flex-wrap: wrap; }

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api, Branch, errorText, RepoInfo, Status } from "../api";
 import { ago, copyText, fullDate, plural } from "../format";
-import { CopyIcon, SearchIcon, SwitchIcon, TrashIcon } from "./Icons";
+import { CardIcon, CopyIcon, SearchIcon, SwitchIcon, TrashIcon } from "./Icons";
 import { DeleteDialog } from "./OpDialogs";
 import { ErrorBanner } from "./ErrorBanner";
 import BasePicker from "./BasePicker";
@@ -85,9 +85,11 @@ interface Props {
   onList?: (list: Branch[]) => void;
   /** The base the list is compared with, for "new branch" to start from. */
   onBase?: (base: string) => void;
+  /** Open the branch's card page. */
+  onCard?: (branch: Branch) => void;
 }
 
-export default function Branches({ info, tick, active, onOpen, onChanged, onCheckout, onList, onBase }: Props) {
+export default function Branches({ info, tick, active, onOpen, onChanged, onCheckout, onList, onBase, onCard }: Props) {
   const baseNames = info.bases.map((b) => b.name);
   const defaultBase = info.bases.find((b) => b.role === "develop")?.name ?? baseNames[0] ?? info.flow.master;
   const [base, setBase] = useState(defaultBase);
@@ -347,6 +349,7 @@ export default function Branches({ info, tick, active, onOpen, onChanged, onChec
                   onCopy={copy}
                   onOpen={() => onOpen(b, base)}
                   onCheckout={() => onCheckout(b)}
+                  onCard={onCard && (() => onCard(b))}
                 />
               ))}
             </tbody>
@@ -396,9 +399,10 @@ interface RowProps {
   onCopy: (t: string) => void;
   onOpen: () => void;
   onCheckout: () => void;
+  onCard?: () => void;
 }
 
-function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen, onCheckout }: RowProps) {
+function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen, onCheckout, onCard }: RowProps) {
   const slash = b.name.indexOf("/");
   const pre = slash > 0 ? b.name.slice(0, slash + 1) : "";
   const rest = slash > 0 ? b.name.slice(slash + 1) : b.name;
@@ -469,6 +473,19 @@ function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen, onCheckou
       </td>
       <td className="muted num" title={fullDate(b.tip.date)}>{ago(b.tip.date, now)}</td>
       <td className="acts">
+        {onCard && (
+          <button
+            className="ib"
+            onClick={(e) => {
+              e.stopPropagation();
+              onCard();
+            }}
+            title="Карточка ветки: статус против каждой базы, коммиты, файлы"
+            aria-label={`Карточка ${b.name}`}
+          >
+            <CardIcon />
+          </button>
+        )}
         {!b.isHead && (
           <button
             className="ib"

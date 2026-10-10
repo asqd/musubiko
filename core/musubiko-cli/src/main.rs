@@ -6,6 +6,8 @@
 //! pair and, with `--run`, creates it.
 //! `musubiko new NAME [PATH] [--base develop] [--local] [--push] [--after …] [--run]` plans a new
 //! branch from the base (fresh from the server unless `--local`) and, with `--run`, creates it.
+//! `musubiko card BRANCH [PATH] [--base develop]` shows one branch against every base, with its
+//! own commits and files.
 //! `musubiko where QUERY [PATH]` finds commits and tells where each one is.
 //! `musubiko radar [PATH]` shows which hotfix commits are not on the develop side.
 //! `--json` prints exactly what the app receives.
@@ -59,7 +61,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             _ if matches!(
                 cmd.as_str(),
-                "diff" | "conflicts" | "hotfix" | "new" | "where"
+                "diff" | "conflicts" | "hotfix" | "new" | "card" | "where"
             ) && branch.is_none() =>
             {
                 branch = Some(a)
@@ -108,13 +110,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
             let now = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs() as i64;
             for b in &list {
-                let status = match &b.status {
-                    Status::Merged => "merged".to_string(),
-                    Status::Squashed => "squashed".to_string(),
-                    Status::Conflict { files } => format!("conflict ({})", files.len()),
-                    Status::Open => "open".to_string(),
-                    Status::Unknown { error } => format!("? {error}"),
-                };
+                let status = status_word(&b.status);
                 let loc = match b.location {
                     Location::Both => "",
                     Location::Local => " [local]",
@@ -308,6 +304,45 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 return Err("остановился; сделанное не откатывал".into());
             }
         }
+        "card" => {
+            let name = branch.ok_or("укажите ветку: musubiko card BRANCH [PATH]")?;
+            let base = match base {
+                Some(b) => b,
+                None => repo.default_base()?,
+            };
+            let card = repo.branch_card(&name, &base)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&card)?);
+                return Ok(());
+            }
+            let b = &card.branch;
+            println!(
+                "{}  {}  {}",
+                b.name,
+                b.owner.name,
+                card.upstream.as_deref().unwrap_or("без upstream")
+            );
+            for x in &card.against {
+                println!(
+                    "  против {:<10} {:<14} ↑{} ↓{}",
+                    x.target,
+                    status_word(&x.status),
+                    x.ahead,
+                    x.behind
+                );
+            }
+            println!("Свои коммиты против {}: {}", b.target, card.commit_count);
+            for c in &card.commits {
+                println!("  {} {}", c.short, c.subject);
+            }
+            println!("Файлы: {}", card.files.len());
+            for f in &card.files {
+                match (f.added, f.removed) {
+                    (Some(a), Some(r)) => println!("  +{a:<5} -{r:<5} {}", f.path),
+                    _ => println!("  бинарный     {}", f.path),
+                }
+            }
+        }
         "radar" => {
             let started = Instant::now();
             let r = repo.hotfix_radar()?;
@@ -405,4 +440,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     Ok(())
+}
+
+fn status_word(s: &Status) -> String {
+    match s {
+        Status::Merged => "merged".to_string(),
+        Status::Squashed => "squashed".to_string(),
+        Status::Conflict { files } => format!("conflict ({})", files.len()),
+        Status::Open => "open".to_string(),
+        Status::Unknown { error } => format!("? {error}"),
+    }
 }
