@@ -219,10 +219,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{}", serde_json::to_string_pretty(&plan)?);
                 return Ok(());
             }
-            println!(
-                "{} ← {}\n{} ← {}",
-                plan.master_branch, plan.master_from, plan.dev_branch, plan.dev_from
-            );
+            println!("{} ← {}", plan.master_branch, plan.master_from);
+            if plan.with_dev {
+                println!("{} ← {}", plan.dev_branch, plan.dev_from);
+            }
+            for w in &plan.warnings {
+                println!("· {w}");
+            }
             for p in &plan.problems {
                 println!("! {p}");
             }
@@ -265,16 +268,19 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
                     p.unsynced
                 );
                 for c in &p.commits {
-                    let to = c
-                        .ported
-                        .as_ref()
-                        .map(|x| format!("→ {} в {}", x.short, x.place))
-                        .unwrap_or_else(|| "✗ не перенесён".into());
+                    let to = match (&c.ported, r.has_develop) {
+                        (_, false) => String::new(),
+                        (Some(x), true) => format!("→ {} в {}", x.short, x.place),
+                        (None, true) => "✗ не перенесён".into(),
+                    };
                     println!("    {} {:<50} {to}", c.commit.short, c.commit.subject);
                 }
                 if let Some(n) = &p.note {
                     println!("    ({n})");
                 }
+            }
+            if !r.has_develop {
+                println!("Ветки {} нет: хотфиксы переносить некуда", r.develop);
             }
             if let Some(d) = r.develop_stale_days {
                 println!(

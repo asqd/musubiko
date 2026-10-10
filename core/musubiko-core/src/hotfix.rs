@@ -1,4 +1,5 @@
 //! Starting a hotfix: `hotfix/<name>` from fresh master and `hotfix/<name>-dev` from fresh develop.
+//! A repository without develop gets only the first one.
 
 use std::path::PathBuf;
 
@@ -37,12 +38,16 @@ pub struct HotfixPlan {
     /// Where each half starts, e.g. `origin/master`.
     pub master_from: String,
     pub dev_from: String,
+    /// Whether the `-dev` half is made: false when the repository has no develop.
+    pub with_dev: bool,
     pub worktree_path: Option<String>,
     pub can_push: bool,
     pub steps: Vec<Step>,
     pub commands: Vec<String>,
     /// Reasons the plan cannot run; empty when it can.
     pub problems: Vec<String>,
+    /// Worth knowing, but nothing stops the plan.
+    pub warnings: Vec<String>,
 }
 
 impl Repo {
@@ -52,11 +57,18 @@ impl Repo {
         let master_branch = format!("{}{slug}", flow.hotfix_prefix);
         let dev_branch = format!("{master_branch}{}", flow.dev_suffix);
         let refs = self.refs()?;
+        let with_dev = refs.contains_key(&flow.develop);
         let mut problems = Vec::new();
+        let mut warnings = Vec::new();
         if slug.is_empty() {
             problems.push("Введите название: номер задачи или пару слов".to_string());
         }
-        for b in [&master_branch, &dev_branch] {
+        let ours: Vec<&String> = if with_dev {
+            vec![&master_branch, &dev_branch]
+        } else {
+            vec![&master_branch]
+        };
+        for b in ours.iter().copied() {
             if !slug.is_empty() && refs.contains_key(b.as_str()) {
                 problems.push(format!("Ветка {b} уже есть"));
             }
@@ -78,40 +90,42 @@ impl Repo {
         if master_from.is_none() {
             problems.push(format!("Нет ветки {}", flow.master));
         }
-        if dev_from.is_none() {
-            problems.push(format!("Нет ветки {}", flow.develop));
+        if !with_dev {
+            warnings.push(format!(
+                "В репозитории нет ветки {}: создам только {master_branch} от {}, \
+                 переносить исправление некуда.",
+                flow.develop, flow.master
+            ));
         }
         let master_from = master_from.unwrap_or_else(|| flow.master.clone());
         let dev_from = dev_from.unwrap_or_else(|| flow.develop.clone());
 
         let mut steps = Vec::new();
         if let Some(rm) = &remote {
-            let fetch: Vec<&str> = [flow.master.as_str(), flow.develop.as_str()]
-                .into_iter()
-                .filter(|b| on_remote(b))
-                .collect();
+            let bases: Vec<&str> = if with_dev {
+                vec![flow.master.as_str(), flow.develop.as_str()]
+            } else {
+                vec![flow.master.as_str()]
+            };
+            let fetch: Vec<&str> = bases.iter().copied().filter(|b| on_remote(b)).collect();
             if !fetch.is_empty() {
                 let mut args = vec!["fetch", rm.as_str()];
-                args.extend(fetch);
+                args.extend(&fetch);
                 steps.push(Step::new(
-                    format!("Получить свежие {} и {}", flow.master, flow.develop),
+                    format!("Получить свежие {}", bases.join(" и ")),
                     &args,
                 ));
             }
+            let names: Vec<&str> = ours.iter().map(|b| b.as_str()).collect();
+            let heads: Vec<String> = names.iter().map(|b| format!("refs/heads/{b}")).collect();
+            let mut args = vec!["ls-remote", "--heads", rm.as_str()];
+            args.extend(heads.iter().map(String::as_str));
             steps.push(Step {
                 fail_if_output: Some(format!(
-                    "{master_branch} или {dev_branch} уже есть на {rm}: выберите другое название"
+                    "{} уже есть на {rm}: выберите другое название",
+                    names.join(" или ")
                 )),
-                ..Step::new(
-                    format!("Проверить, что названия свободны на {rm}"),
-                    &[
-                        "ls-remote",
-                        "--heads",
-                        rm,
-                        &format!("refs/heads/{master_branch}"),
-                        &format!("refs/heads/{dev_branch}"),
-                    ],
-                )
+                ..Step::new(format!("Проверить, что названия свободны на {rm}"), &args)
             });
         }
         steps.push(
@@ -123,27 +137,31 @@ impl Repo {
                 name: master_branch.clone(),
             }),
         );
-        steps.push(
-            Step::new(
-                format!("Создать {dev_branch} от {dev_from}"),
-                &["branch", "--no-track", &dev_branch, &dev_from],
-            )
-            .with_effect(Effect::Branch {
-                name: dev_branch.clone(),
-            }),
-        );
-        let can_push = remote.is_some();
-        if let (true, Some(rm)) = (input.push, &remote) {
+        if with_dev {
             steps.push(
                 Step::new(
-                    format!("Запушить обе ветки на {rm}"),
-                    &["push", "-u", rm, &master_branch, &dev_branch],
+                    format!("Создать {dev_branch} от {dev_from}"),
+                    &["branch", "--no-track", &dev_branch, &dev_from],
                 )
-                .with_effect(Effect::Push {
-                    remote: rm.clone(),
-                    names: vec![master_branch.clone(), dev_branch.clone()],
+                .with_effect(Effect::Branch {
+                    name: dev_branch.clone(),
                 }),
             );
+        }
+        let can_push = remote.is_some();
+        if let (true, Some(rm)) = (input.push, &remote) {
+            let names: Vec<String> = ours.iter().map(|b| b.to_string()).collect();
+            let mut args = vec!["push", "-u", rm.as_str()];
+            args.extend(names.iter().map(String::as_str));
+            let title = if with_dev {
+                format!("Запушить обе ветки на {rm}")
+            } else {
+                format!("Запушить {master_branch} на {rm}")
+            };
+            steps.push(Step::new(title, &args).with_effect(Effect::Push {
+                remote: rm.clone(),
+                names,
+            }));
         }
 
         let mut worktree_path = None;
@@ -174,10 +192,12 @@ impl Repo {
             dev_branch,
             master_from,
             dev_from,
+            with_dev,
             worktree_path,
             can_push,
             steps,
             problems,
+            warnings,
         })
     }
 

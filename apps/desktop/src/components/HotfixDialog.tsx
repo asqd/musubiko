@@ -83,7 +83,7 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
               Отмена
             </button>
             <button className="btn hot" onClick={create} disabled={!ready}>
-              Создать ветки
+              {plan && !plan.withDev ? "Создать ветку" : "Создать ветки"}
             </button>
           </>
         )
@@ -121,25 +121,35 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
                   )}
                 </span>
               </div>
-              <div className="nb">
-                <span className="ic d">D</span>
-                <span className="n">{plan?.slug ? plan.devBranch : `${info.flow.hotfixPrefix}…${info.flow.devSuffix}`}</span>
-                <span className="from">
-                  от свежего <b>{plan?.devFrom ?? info.flow.develop}</b>
-                  {develop && (
-                    <>
-                      {" "}
-                      · <span className="mono">{develop.tip.short}</span> · {ago(develop.tip.date)}
-                    </>
-                  )}
-                </span>
-              </div>
+              {(plan ? plan.withDev : !!develop) && (
+                <div className="nb">
+                  <span className="ic d">D</span>
+                  <span className="n">{plan?.slug ? plan.devBranch : `${info.flow.hotfixPrefix}…${info.flow.devSuffix}`}</span>
+                  <span className="from">
+                    от свежего <b>{plan?.devFrom ?? info.flow.develop}</b>
+                    {develop && (
+                      <>
+                        {" "}
+                        · <span className="mono">{develop.tip.short}</span> · {ago(develop.tip.date)}
+                      </>
+                    )}
+                  </span>
+                </div>
+              )}
             </div>
+
+            {plan && plan.warnings.length > 0 && (
+              <div className="warnbox">
+                {plan.warnings.map((w) => (
+                  <div key={w}>{w}</div>
+                ))}
+              </div>
+            )}
 
             {plan?.canPush && (
               <label className="opt">
                 <input type="checkbox" checked={push} onChange={(e) => setPush(e.target.checked)} />
-                <span>Запушить обе ветки и настроить upstream</span>
+                <span>{plan.withDev ? "Запушить обе ветки и настроить upstream" : "Запушить ветку и настроить upstream"}</span>
               </label>
             )}
 
@@ -155,7 +165,7 @@ export default function HotfixDialog({ info, onClose, onChanged }: Props) {
               />
               <label className="opt">
                 <input type="checkbox" checked={stay} onChange={(e) => setStay(e.target.checked)} />
-                <span>Только создать ветки, никуда не переключаться</span>
+                <span>{plan && !plan.withDev ? "Только создать ветку, никуда не переключаться" : "Только создать ветки, никуда не переключаться"}</span>
               </label>
             </div>
 

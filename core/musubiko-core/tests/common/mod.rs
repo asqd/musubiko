@@ -131,6 +131,22 @@ pub fn with_origin() -> Fixture {
     f
 }
 
+/// A bare `origin` next to the fixture, with `branches` pushed to it.
+pub fn add_origin(f: &Fixture, branches: &[&str]) {
+    let parent = f.root.parent().unwrap().to_path_buf();
+    f.git_in(&parent, &["init", "-q", "--bare", "origin.git"]);
+    f.git(&[
+        "remote",
+        "add",
+        "origin",
+        parent.join("origin.git").to_str().unwrap(),
+    ]);
+    let mut push = vec!["push", "-q", "origin"];
+    push.extend_from_slice(branches);
+    f.git(&push);
+    f.git(&["fetch", "-q", "origin"]);
+}
+
 impl Fixture {
     /// Branch names on origin.
     pub fn remote_heads(&self) -> Vec<String> {

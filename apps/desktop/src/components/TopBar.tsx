@@ -3,6 +3,7 @@ import { RepoInfo, Settings } from "../api";
 import { ago, fullDate, plural } from "../format";
 import { BranchIcon, DownloadIcon, FlameIcon, Logo, RefreshIcon, SearchIcon } from "./Icons";
 import { key } from "../platform";
+import { hasDevelop } from "./Radar";
 
 interface Props {
   info: RepoInfo;
@@ -158,7 +159,11 @@ export default function TopBar({
         <SearchIcon />
         <kbd>{key("K")}</kbd>
       </button>
-      <button className="btn hot" onClick={onHotfix} title={`${info.flow.hotfixPrefix}… от ${info.flow.master} и ${info.flow.hotfixPrefix}…${info.flow.devSuffix} от ${info.flow.develop}`}>
+      <button className="btn hot" onClick={onHotfix} title={
+          hasDevelop(info)
+            ? `${info.flow.hotfixPrefix}… от ${info.flow.master} и ${info.flow.hotfixPrefix}…${info.flow.devSuffix} от ${info.flow.develop}`
+            : `${info.flow.hotfixPrefix}… от ${info.flow.master}`
+        }>
         <FlameIcon />
         Новый hotfix
       </button>

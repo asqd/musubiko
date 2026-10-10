@@ -4,6 +4,7 @@ import { ago, copyText, fullDate, plural } from "../format";
 import { SearchIcon } from "./Icons";
 import { PortDialog } from "./OpDialogs";
 import { ErrorBanner } from "./ErrorBanner";
+import { hasDevelop } from "./Radar";
 
 interface Props {
   info: RepoInfo;
@@ -47,7 +48,9 @@ function verdictText(r: CommitPlace, s: CommitSearch): string {
     case "developOnly":
       return `В ${dev}, ждёт релиза в ${s.master}.`;
     case "branchesOnly":
-      return `Пока только в ${r.branches.length === 1 ? "ветке" : "ветках"}, ни в ${s.master}, ни в ${dev} его нет.`;
+      return s.develop
+        ? `Пока только в ${r.branches.length === 1 ? "ветке" : "ветках"}, ни в ${s.master}, ни в ${dev} его нет.`
+        : `Пока только в ${r.branches.length === 1 ? "ветке" : "ветках"}, в ${s.master} его нет.`;
     case "nowhere":
       return "Не лежит ни в одной ветке: возможно, ветку удалили. Найти его можно только по хэшу.";
   }
@@ -128,8 +131,9 @@ export default function Locate({ info, request, radar, active, onChanged }: Prop
         </button>
       </form>
       <p className="legend">
-        Номер задачи ищется и в сообщениях коммитов, и в названиях веток. Присутствие в {info.flow.master} и{" "}
-        {info.flow.develop} проверяется по самому коммиту, по его cherry-pick и по содержимому (после squash).
+        Номер задачи ищется и в сообщениях коммитов, и в названиях веток. Присутствие в {info.flow.master}
+        {hasDevelop(info) && ` и ${info.flow.develop}`} проверяется по самому коммиту, по его cherry-pick и по содержимому (после
+        squash).
       </p>
       {error && <ErrorBanner error={error} />}
       {search?.developStaleDays != null && (

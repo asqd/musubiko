@@ -86,6 +86,9 @@ pub struct Radar {
     pub recent_days: i64,
     pub master: String,
     pub develop: String,
+    /// The repository has no develop: a hotfix is a single branch and there is nothing to carry
+    /// over, so pairs only say whether the fix reached master.
+    pub has_develop: bool,
 }
 
 impl Repo {
@@ -95,9 +98,7 @@ impl Repo {
         let master_ref = self
             .base_ref(&flow.master, &refs)
             .ok_or_else(|| Error::NoBranch(flow.master.clone()))?;
-        let develop_ref = self
-            .base_ref(&flow.develop, &refs)
-            .ok_or_else(|| Error::NoBranch(flow.develop.clone()))?;
+        let develop_ref = self.base_ref(&flow.develop, &refs);
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
@@ -155,9 +156,9 @@ impl Repo {
                     Some(b) => self.own_range(b, &master_ref)?,
                     None => (None, None),
                 };
-                let d_range = match d {
-                    Some(b) => self.own_range(b, &develop_ref)?.0,
-                    None => None,
+                let d_range = match (d, &develop_ref) {
+                    (Some(b), Some(dr)) => self.own_range(b, dr)?.0,
+                    _ => None,
                 };
                 Ok((m_range, d_range))
             })
@@ -173,16 +174,16 @@ impl Repo {
                     .and_then(|c| c.first().map(|c| c.date))
             })
             .min();
-        let develop_ids: HashMap<String, String> = match oldest {
-            Some(t) => self
+        let develop_ids: HashMap<String, String> = match (oldest, &develop_ref) {
+            (Some(t), Some(dr)) => self
                 .patch_ids(&[
                     "--max-count=5000",
                     &format!("--since={}", t - 7 * 86_400),
-                    &develop_ref,
+                    dr,
                 ])?
                 .into_iter()
                 .collect(),
-            None => HashMap::new(),
+            _ => HashMap::new(),
         };
 
         let mut pairs: Vec<HotfixPair> = found
@@ -231,7 +232,7 @@ impl Repo {
                         .collect();
                     // No twin by patch: look at content, which survives squash merges.
                     let mut commits = commits;
-                    if commits.iter().any(|c| c.ported.is_none()) {
+                    if develop_ref.is_some() && commits.iter().any(|c| c.ported.is_none()) {
                         let mut probes = Vec::new();
                         if let Some(d) = &dev {
                             probes.push((
@@ -239,10 +240,9 @@ impl Repo {
                                 dev_branch.clone(),
                             ));
                         }
-                        probes.push((
-                            ContentProbe::new(self, &develop_ref)?,
-                            self.flow.develop.clone(),
-                        ));
+                        if let Some(dr) = &develop_ref {
+                            probes.push((ContentProbe::new(self, dr)?, self.flow.develop.clone()));
+                        }
                         for c in commits.iter_mut().filter(|c| c.ported.is_none()) {
                             for (probe, place) in &probes {
                                 if probe.has(&c.commit.hash)? {
@@ -257,13 +257,26 @@ impl Repo {
                             }
                         }
                     }
-                    let unsynced = commits.iter().filter(|c| c.ported.is_none()).count() as u32;
+                    // Without develop there is nowhere to carry commits to.
+                    let unsynced = if develop_ref.is_some() {
+                        commits.iter().filter(|c| c.ported.is_none()).count() as u32
+                    } else {
+                        0
+                    };
                     let merged = |b: &Option<Branch>| {
                         b.as_ref()
                             .is_some_and(|b| matches!(b.status, Status::Merged | Status::Squashed))
                     };
                     let (m_merged, d_merged) = (merged(&master), merged(&dev));
-                    let state = if commits.is_empty() {
+                    let state = if develop_ref.is_none() {
+                        if m_merged {
+                            PairState::Done
+                        } else if commits.is_empty() {
+                            PairState::Empty
+                        } else {
+                            PairState::Work
+                        }
+                    } else if commits.is_empty() {
                         if m_merged && d_merged {
                             PairState::Done
                         } else {
@@ -321,32 +334,36 @@ impl Repo {
                 .parse()
                 .unwrap_or(0))
         };
-        let lag = (tip_date(&master_ref)? - tip_date(&develop_ref)?) / 86_400;
-        let develop_stale_days = (lag > STALE_DEVELOP_DAYS).then_some(lag);
+        let develop_stale_days = match &develop_ref {
+            Some(dr) => {
+                let lag = (tip_date(&master_ref)? - tip_date(dr)?) / 86_400;
+                (lag > STALE_DEVELOP_DAYS).then_some(lag)
+            }
+            None => None,
+        };
 
         let in_pairs: HashSet<&str> = pairs
             .iter()
             .flat_map(|p| p.commits.iter().map(|c| c.commit.hash.as_str()))
             .collect();
-        let candidates: Vec<Commit> = if develop_stale_days.is_some() {
-            Vec::new()
-        } else {
-            self.log(&[
-                "--cherry-pick",
-                "--right-only",
-                "--no-merges",
-                "--max-count=300",
-                &format!("--since={LOST_DAYS}.days"),
-                &format!("{develop_ref}...{master_ref}"),
-            ])?
-            .into_iter()
-            .filter(|c| !in_pairs.contains(c.hash.as_str()))
-            .collect()
-        };
-        let lost = if candidates.is_empty() || develop_stale_days.is_some() {
-            Vec::new()
-        } else {
-            let probe = ContentProbe::new(self, &develop_ref)?;
+        let candidates: Vec<Commit> =
+            if let (None, Some(develop_ref)) = (develop_stale_days, &develop_ref) {
+                self.log(&[
+                    "--cherry-pick",
+                    "--right-only",
+                    "--no-merges",
+                    "--max-count=300",
+                    &format!("--since={LOST_DAYS}.days"),
+                    &format!("{develop_ref}...{master_ref}"),
+                ])?
+                .into_iter()
+                .filter(|c| !in_pairs.contains(c.hash.as_str()))
+                .collect()
+            } else {
+                Vec::new()
+            };
+        let lost = if let (false, Some(develop_ref)) = (candidates.is_empty(), &develop_ref) {
+            let probe = ContentProbe::new(self, develop_ref)?;
             let mut lost = Vec::new();
             for c in candidates {
                 if !probe.has(&c.hash)? {
@@ -354,6 +371,8 @@ impl Repo {
                 }
             }
             lost
+        } else {
+            Vec::new()
         };
 
         Ok(Radar {
@@ -364,6 +383,7 @@ impl Repo {
             recent_days: RECENT_DAYS,
             master: flow.master,
             develop: flow.develop,
+            has_develop: develop_ref.is_some(),
         })
     }
 

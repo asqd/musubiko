@@ -2,29 +2,13 @@
 
 mod common;
 
-use common::Fixture;
+use common::{Fixture, add_origin};
 use musubiko_core::{After, HotfixInput, OpStatus, Operation, Repo};
 
 fn run(op: &mut Operation, repo: &Repo) {
     while op.status == OpStatus::Running {
         op.step(repo);
     }
-}
-
-/// A bare `origin` next to the fixture, with `branches` pushed to it.
-fn add_origin(f: &Fixture, branches: &[&str]) {
-    let parent = f.root.parent().unwrap().to_path_buf();
-    f.git_in(&parent, &["init", "-q", "--bare", "origin.git"]);
-    f.git(&[
-        "remote",
-        "add",
-        "origin",
-        parent.join("origin.git").to_str().unwrap(),
-    ]);
-    let mut push = vec!["push", "-q", "origin"];
-    push.extend_from_slice(branches);
-    f.git(&push);
-    f.git(&["fetch", "-q", "origin"]);
 }
 
 /// `main` and `develop` on origin, no `master` anywhere.

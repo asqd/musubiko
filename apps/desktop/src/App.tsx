@@ -8,7 +8,7 @@ import TopBar from "./components/TopBar";
 import DiffView from "./diff/DiffView";
 import HotfixDialog from "./components/HotfixDialog";
 import Journal from "./components/Journal";
-import Radar, { needsAttention, pairState } from "./components/Radar";
+import Radar, { hasDevelop, needsAttention, pairState } from "./components/Radar";
 import Locate from "./components/Locate";
 import CheckoutDialog from "./components/CheckoutDialog";
 import Palette, { Command } from "./palette/Palette";
@@ -229,7 +229,7 @@ export default function App() {
   const commands: Command[] = !info
     ? []
     : [
-        { id: "act:hotfix", group: "Действия", label: "Новый hotfix", hint: `${info.flow.master} + ${info.flow.develop}`, run: () => setHotfixOpen(true) },
+        { id: "act:hotfix", group: "Действия", label: "Новый hotfix", hint: hasDevelop(info) ? `${info.flow.master} + ${info.flow.develop}` : `от ${info.flow.master}`, run: () => setHotfixOpen(true) },
         ...(info.remote
           ? [{ id: "act:fetch", group: "Действия", label: "Получить с сервера", hint: "git fetch --prune", run: () => void fetchNow() }]
           : []),

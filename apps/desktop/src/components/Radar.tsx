@@ -28,6 +28,9 @@ export function pairState(state: PairState, flow: Flow): [string, string] {
 }
 const ATTENTION: PairState[] = ["lost", "noDev", "unsynced"];
 
+/** The repository has a develop branch to carry hotfixes over to. */
+export const hasDevelop = (info: RepoInfo) => info.bases.some((b) => b.role === "develop");
+
 export const needsAttention = (r: RadarData | null) =>
   r ? r.pairs.filter((p) => ATTENTION.includes(p.state)).length + r.lost.length : 0;
 
@@ -75,14 +78,21 @@ export default function Radar({ info, radar, error, loading, onHotfix, onDiff, o
           Новый hotfix
         </button>
       </div>
-      <p className="legend">
-        Хотфикс — пара веток: <span className="mono">{hotfixPrefix}имя</span> от {info.flow.master} и{" "}
-        <span className="mono">
-          {hotfixPrefix}имя{devSuffix}
-        </span>{" "}
-        от {info.flow.develop}. Пары сверяются по содержимому коммитов, поэтому cherry-pick и squash-слияние тоже считаются
-        переносом.
-      </p>
+      {hasDevelop(info) ? (
+        <p className="legend">
+          Хотфикс — пара веток: <span className="mono">{hotfixPrefix}имя</span> от {info.flow.master} и{" "}
+          <span className="mono">
+            {hotfixPrefix}имя{devSuffix}
+          </span>{" "}
+          от {info.flow.develop}. Пары сверяются по содержимому коммитов, поэтому cherry-pick и squash-слияние тоже считаются
+          переносом.
+        </p>
+      ) : (
+        <p className="legend">
+          Хотфикс — ветка <span className="mono">{hotfixPrefix}имя</span> от {info.flow.master}. Ветки {info.flow.develop} в этом
+          репозитории нет, поэтому переносить исправления некуда: здесь видно, дошёл ли хотфикс до {info.flow.master}.
+        </p>
+      )}
       {error && <ErrorBanner error={error} />}
 
       {radar?.developStaleDays != null && (
@@ -226,7 +236,9 @@ function PairCard({
   onDialog: (d: Dialog) => void;
 }) {
   const [label, cls] = pairState(p.state, info.flow);
-  const missing = p.commits.filter((c) => !c.ported).map((c) => c.commit);
+  const withDev = hasDevelop(info);
+  // Without develop there is nowhere to carry commits to.
+  const missing = withDev ? p.commits.filter((c) => !c.ported).map((c) => c.commit) : [];
   const newest = [p.master, p.dev].filter(Boolean).map((b) => b!.tip.date);
   const owner = p.master?.owner.name ?? p.dev?.owner.name;
   return (
@@ -242,11 +254,11 @@ function PairCard({
       </div>
       <div className="lanes">
         <Lane name={p.masterBranch} target={info.flow.master} b={p.master} onDiff={onDiff} />
-        <Lane name={p.devBranch} target={info.flow.develop} b={p.dev} onDiff={onDiff} />
+        {(withDev || p.dev) && <Lane name={p.devBranch} target={info.flow.develop} b={p.dev} onDiff={onDiff} />}
       </div>
       {p.commits.length > 0 && (
         <div className="sync">
-          <h4>Коммиты {info.flow.master}-части → {info.flow.develop}-сторона</h4>
+          <h4>{withDev ? `Коммиты ${info.flow.master}-части → ${info.flow.develop}-сторона` : "Коммиты хотфикса"}</h4>
           {p.commits.map(({ commit: c, ported }) => (
             <div key={c.hash} className="srow">
               <button className="hash" onClick={() => onFind(c.hash)} title="Где этот коммит?">
@@ -255,7 +267,7 @@ function PairCard({
               <span className="m" title={c.subject}>
                 {c.subject}
               </span>
-              {ported ? (
+              {!withDev ? null : ported ? (
                 <span className="res ok" title={ported.byContent ? "Отдельного коммита нет, но изменения уже там (например, squash)" : ""}>
                   ✓ {ported.byContent ? "уже" : ported.short} в {ported.place}
                 </span>

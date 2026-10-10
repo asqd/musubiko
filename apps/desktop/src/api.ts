@@ -165,11 +165,14 @@ export interface HotfixPlan {
   devBranch: string;
   masterFrom: string;
   devFrom: string;
+  /** False when the repository has no develop: only the master half is made. */
+  withDev: boolean;
   worktreePath: string | null;
   canPush: boolean;
   steps: Step[];
   commands: string[];
   problems: string[];
+  warnings: string[];
 }
 
 export type StepState = { kind: "pending" } | { kind: "done"; output: string } | { kind: "failed"; error: string };
@@ -242,6 +245,8 @@ export interface Radar {
   recentDays: number;
   master: string;
   develop: string;
+  /** No develop: a hotfix is one branch and nothing is carried over. */
+  hasDevelop: boolean;
 }
 
 export type Presence =
