@@ -2127,6 +2127,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "musubiko-bridge"
+version = "0.1.0"
+dependencies = [
+ "musubiko-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "musubiko-cli"
 version = "0.1.0"
 dependencies = [

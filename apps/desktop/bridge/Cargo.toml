@@ -1,0 +1,12 @@
+[package]
+name = "musubiko-bridge"
+description = "Dev only: the app's commands over HTTP, to test the UI in a browser"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+musubiko-core.workspace = true
+serde.workspace = true
+serde_json.workspace = true

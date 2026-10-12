@@ -4,6 +4,7 @@ members = [
     "core/musubiko-core",
     "core/musubiko-cli",
     "apps/desktop/src-tauri",
+    "apps/desktop/bridge",
 ]
 
 [workspace.package]
