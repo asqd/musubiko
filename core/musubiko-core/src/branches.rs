@@ -353,9 +353,16 @@ impl Repo {
         Ok(())
     }
 
-    /// Author of the oldest commit that is in `branch` and not in `target`.
+    /// The oldest commit of the branch's own line: first parents only, in graph order — commit
+    /// dates are the same after a rebase and say nothing about who started.
     fn first_author(&self, target: &str, branch: &str) -> Result<Option<Person>> {
-        let out = self.run(&["log", "--format=%an%x00%ae", &format!("{target}..{branch}")])?;
+        let out = self.run(&[
+            "log",
+            "--first-parent",
+            "--topo-order",
+            "--format=%an%x00%ae",
+            &format!("{target}..{branch}"),
+        ])?;
         Ok(out.lines().rfind(|l| !l.is_empty()).map(|l| {
             let (name, email) = l.split_once('\0').unwrap_or((l, ""));
             Person {

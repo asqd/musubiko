@@ -239,3 +239,67 @@ fn a_branch_without_commits_is_new_and_belongs_to_its_creator() {
         (Status::New, "me@example.com")
     );
 }
+
+#[test]
+fn the_owner_is_whoever_started_the_branch_whatever_the_commit_dates() {
+    let f = with_origin();
+    let commit = |file: &str, who: &str, email: &str, date: &str| {
+        std::fs::write(f.root.join(file), format!("{file}\n")).unwrap();
+        f.git(&["add", file]);
+        let out = std::process::Command::new(f.git.path())
+            .args(["commit", "-q", "-m", file])
+            .current_dir(&f.root)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_AUTHOR_NAME", who)
+            .env("GIT_AUTHOR_EMAIL", email)
+            .env("GIT_COMMITTER_NAME", who)
+            .env("GIT_COMMITTER_EMAIL", email)
+            .env("GIT_AUTHOR_DATE", date)
+            .env("GIT_COMMITTER_DATE", date)
+            .output()
+            .unwrap();
+        assert!(out.status.success());
+    };
+    // Started by Ann; later Bob's work, committed earlier, is merged into it (as on LT-22277).
+    f.git(&["checkout", "-q", "-b", "bob/side", "develop"]);
+    commit("b.txt", "Bob", "bob@example.com", "1700000100 +0000");
+    f.git(&["checkout", "-q", "-b", "feature/started-by-ann", "develop"]);
+    commit("a.txt", "Ann", "ann@example.com", "1700000200 +0000");
+    let out = std::process::Command::new(f.git.path())
+        .args(["merge", "-q", "--no-ff", "-m", "Merge bob/side", "bob/side"])
+        .current_dir(&f.root)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_AUTHOR_NAME", "Ann")
+        .env("GIT_AUTHOR_EMAIL", "ann@example.com")
+        .env("GIT_COMMITTER_NAME", "Ann")
+        .env("GIT_COMMITTER_EMAIL", "ann@example.com")
+        .env("GIT_AUTHOR_DATE", "1700000300 +0000")
+        .env("GIT_COMMITTER_DATE", "1700000300 +0000")
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    f.git(&["branch", "-q", "-D", "bob/side"]);
+    f.git(&["checkout", "-q", "feature/work"]);
+
+    let list = f.repo().branches("develop").unwrap();
+    let b = list
+        .iter()
+        .find(|b| b.name == "feature/started-by-ann")
+        .unwrap();
+    assert_eq!(b.owner.email, "ann@example.com");
+    let mine = f
+        .repo()
+        .my_branches("develop", Some("ann@example.com"))
+        .unwrap();
+    let w = mine
+        .attention
+        .iter()
+        .chain(mine.active.iter())
+        .find(|w| w.branch.name == "feature/started-by-ann")
+        .expect("in Ann's branches");
+    assert_eq!(
+        w.started,
+        Some(1_700_000_200),
+        "when Ann wrote the first commit"
+    );
+}

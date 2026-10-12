@@ -17,7 +17,8 @@ use crate::branches::{Status, Sync};
 use crate::{Person, Repo};
 
 /// Bump when the way statuses are computed changes; older files are then ignored.
-const VERSION: u32 = 1;
+/// 2: owners are found by graph order, not commit date.
+const VERSION: u32 = 2;
 /// Entries not used for this long are dropped on save.
 const KEEP_DAYS: i64 = 30;
 /// Don't rewrite the file only to refresh "last used" more often than this.
