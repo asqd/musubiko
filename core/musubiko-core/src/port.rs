@@ -266,7 +266,8 @@ impl Repo {
         let mut warnings = Vec::new();
         let mut steps = Vec::new();
         let mut remote_items: Vec<(String, String)> = Vec::new();
-        // Refs that keep the deleted tips from garbage collection, so undo works even weeks later.
+        // Refs that keep the deleted tips from garbage collection, so undo works even weeks later;
+        // a tip already in master or develop is safe without one (see kept.rs).
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -299,10 +300,12 @@ impl Repo {
                 } else if let Some(p) = self.checked_out_in(name)? {
                     problems.push(format!("{name} открыта в папке {}", p.display()));
                 }
-                keep.push((
-                    format!("refs/musubiko/deleted/{stamp}/local/{name}"),
-                    l.hash.clone(),
-                ));
+                if !self.in_a_base(&l.hash, &refs)? {
+                    keep.push((
+                        format!("refs/musubiko/deleted/{stamp}/local/{name}"),
+                        l.hash.clone(),
+                    ));
+                }
                 let refname = format!("refs/heads/{name}");
                 steps.push(
                     Step {
@@ -322,10 +325,12 @@ impl Repo {
                 );
             }
             if let (true, Some(_), Some(t)) = (input.remote, &self.remote, &r.remote) {
-                keep.push((
-                    format!("refs/musubiko/deleted/{stamp}/remote/{name}"),
-                    t.hash.clone(),
-                ));
+                if !self.in_a_base(&t.hash, &refs)? {
+                    keep.push((
+                        format!("refs/musubiko/deleted/{stamp}/remote/{name}"),
+                        t.hash.clone(),
+                    ));
+                }
                 remote_items.push((name.clone(), t.hash.clone()));
             }
         }

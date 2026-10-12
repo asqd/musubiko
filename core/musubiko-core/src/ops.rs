@@ -523,11 +523,10 @@ impl Repo {
                 "Убрать сохранённые коммиты: ветки вернулись",
                 &["update-ref", "--stdin"],
             )
-            .with_stdin(
-                refs.iter()
-                    .map(|(r, h)| format!("delete {r} {h}"))
-                    .collect(),
-            ),
+            // Without the old value: a ref already let go (its commits reached a base, see
+            // kept.rs) is skipped instead of failing the whole undo. Each ref belongs to this
+            // operation alone, so there is nobody else's to protect.
+            .with_stdin(refs.iter().map(|(r, _)| format!("delete {r}")).collect()),
             Effect::DeleteRemote { remote, name, hash } => Step::new(
                 format!("Восстановить {name} на {remote}"),
                 &["push", remote, &format!("{hash}:refs/heads/{name}")],
