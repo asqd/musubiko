@@ -147,7 +147,7 @@ impl Repo {
             .par_iter()
             .map(|(name, r)| {
                 let target = if fixed {
-                    self.flow.target_for(name, base)
+                    self.flow.target_for(name, base, |n| refs.contains_key(n))
                 } else {
                     base
                 };

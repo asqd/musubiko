@@ -326,7 +326,10 @@ impl Repo {
         let branch_ref = self
             .branch_ref(name, &refs)
             .ok_or_else(|| Error::NoBranch(name.into()))?;
-        let target = self.flow.target_for(name, base).to_string();
+        let target = self
+            .flow
+            .target_for(name, base, |n| refs.contains_key(n))
+            .to_string();
         let target_ref = self
             .base_ref(&target, &refs)
             .ok_or_else(|| Error::NoBranch(target.clone()))?;

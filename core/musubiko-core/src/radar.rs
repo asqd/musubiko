@@ -104,10 +104,7 @@ impl Repo {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0);
-        let slug_of = |name: &str| {
-            let s = &name[flow.hotfix_prefix.len()..];
-            s.strip_suffix(&flow.dev_suffix).unwrap_or(s).to_string()
-        };
+        let slug_of = |name: &str| flow.slug_of(name, |n| refs.contains_key(n));
         // Newest tip per pair straight from the refs, so statuses are computed only for pairs
         // recent enough to show.
         let mut newest: HashMap<String, i64> = HashMap::new();

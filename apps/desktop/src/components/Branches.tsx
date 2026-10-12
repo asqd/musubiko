@@ -31,18 +31,23 @@ function matches(b: Branch, f: Filter, now: number): boolean {
   }
 }
 
+/** A hotfix's develop half. The name does not say ("hotfix/x-on-dev" can be a master half);
+ * the core compares each half with its own base, so the target does. */
+export function isDevHalf(b: Branch, info: RepoInfo): boolean {
+  return b.name.startsWith(info.flow.hotfixPrefix) && b.target === info.flow.develop;
+}
+
 /** Hotfix `-dev` halves go right under their master half; everything else stays newest first. */
 function grouped(list: Branch[], info: RepoInfo): Branch[] {
-  const { hotfixPrefix, devSuffix } = info.flow;
-  const isDev = (n: string) => n.startsWith(hotfixPrefix) && n.endsWith(devSuffix);
-  const names = new Set(list.map((b) => b.name));
+  const { devSuffix } = info.flow;
   const byName = new Map(list.map((b) => [b.name, b]));
   const out: Branch[] = [];
   for (const b of list) {
-    if (isDev(b.name) && names.has(b.name.slice(0, -devSuffix.length))) continue;
+    const master = isDevHalf(b, info) ? byName.get(b.name.slice(0, -devSuffix.length)) : undefined;
+    if (master && !isDevHalf(master, info)) continue;
     out.push(b);
     const dev = byName.get(b.name + devSuffix);
-    if (b.name.startsWith(hotfixPrefix) && !isDev(b.name) && dev) out.push(dev);
+    if (!isDevHalf(b, info) && dev && isDevHalf(dev, info)) out.push(dev);
   }
   return out;
 }
@@ -408,8 +413,7 @@ function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen, onCheckou
   const slash = b.name.indexOf("/");
   const pre = slash > 0 ? b.name.slice(0, slash + 1) : "";
   const rest = slash > 0 ? b.name.slice(slash + 1) : b.name;
-  const { hotfixPrefix, devSuffix } = info.flow;
-  const pair = b.name.startsWith(hotfixPrefix) && b.name.endsWith(devSuffix);
+  const pair = isDevHalf(b, info);
   const owner = b.owner.name || b.tip.author.name;
   return (
     <tr
