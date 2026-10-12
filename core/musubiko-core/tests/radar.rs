@@ -387,3 +387,55 @@ fn a_master_half_whose_name_ends_in_dev_pairs_with_its_own_dev() {
     assert_eq!(pair.state, PairState::Work);
     assert_eq!(pair.unsynced, 0);
 }
+
+/// A hotfix of `commits` (file, content) on master, and on develop's side one squashed commit
+/// with `dev` (file, content).
+fn squash_fixture(commits: &[(&str, &str)], dev: &[(&str, &str)]) -> Fixture {
+    let f = with_origin();
+    f.git(&["checkout", "-q", "-b", "hotfix/LT-9", "master"]);
+    for (i, (file, content)) in commits.iter().enumerate() {
+        f.commit(file, content, &format!("fix {i}"));
+    }
+    f.git(&["checkout", "-q", "-b", "hotfix/LT-9-dev", "develop"]);
+    for (file, content) in dev {
+        std::fs::write(f.root.join(file), content).unwrap();
+        f.git(&["add", file]);
+    }
+    f.git(&["commit", "-q", "-m", "fix (squashed)"]);
+    f.git(&["checkout", "-q", "feature/work"]);
+    f
+}
+
+#[test]
+fn commits_squashed_together_on_the_dev_side_count_as_carried_over() {
+    // The second commit changes what the first added: the first is not there as it was.
+    let f = squash_fixture(
+        &[("h.txt", "a\n"), ("h.txt", "a\nb\n")],
+        &[("h.txt", "a\nb\n")],
+    );
+    let radar = f.repo().hotfix_radar().unwrap();
+    let pair = radar.pairs.iter().find(|p| p.slug == "LT-9").unwrap();
+    assert_eq!(pair.unsynced, 0, "{pair:#?}");
+    assert!(
+        pair.commits
+            .iter()
+            .all(|c| c.ported.as_ref().is_some_and(|p| p.by_content))
+    );
+}
+
+#[test]
+fn a_missing_commit_after_a_squash_is_still_reported() {
+    let f = squash_fixture(
+        &[("h.txt", "a\n"), ("h.txt", "a\nb\n"), ("other.txt", "c\n")],
+        &[("h.txt", "a\nb\n")],
+    );
+    let radar = f.repo().hotfix_radar().unwrap();
+    let pair = radar.pairs.iter().find(|p| p.slug == "LT-9").unwrap();
+    let last = pair.commits.last().unwrap();
+    assert_eq!(last.commit.subject, "fix 2");
+    assert!(
+        last.ported.is_none(),
+        "other.txt never reached the dev side"
+    );
+    assert_ne!(pair.state, PairState::Work);
+}
