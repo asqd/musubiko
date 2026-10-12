@@ -254,16 +254,38 @@ impl Repo {
                         if let Some(dr) = &develop_ref {
                             probes.push((ContentProbe::new(self, dr)?, self.flow.develop.clone()));
                         }
+                        let by_content = |place: &String| Ported {
+                            hash: String::new(),
+                            short: String::new(),
+                            place: place.clone(),
+                            by_content: true,
+                        };
                         for c in commits.iter_mut().filter(|c| c.ported.is_none()) {
                             for (probe, place) in &probes {
                                 if probe.has(&c.commit.hash)? {
-                                    c.ported = Some(Ported {
-                                        hash: String::new(),
-                                        short: String::new(),
-                                        place: place.clone(),
-                                        by_content: true,
-                                    });
+                                    c.ported = Some(by_content(place));
                                     break;
+                                }
+                            }
+                        }
+                        // Squashed together on the develop side: a commit later ones changed
+                        // again is not there as it was, but the sum from it to the tip is.
+                        let tip = commits.last().map(|c| c.commit.hash.clone());
+                        if let Some(tip) = tip {
+                            'suffix: for i in 0..commits.len() {
+                                if commits[i].ported.is_some() {
+                                    continue;
+                                }
+                                let from = format!("{}^", commits[i].commit.hash);
+                                for (probe, place) in &probes {
+                                    if probe.has_range(&from, &tip)? {
+                                        for c in commits[i..].iter_mut() {
+                                            if c.ported.is_none() {
+                                                c.ported = Some(by_content(place));
+                                            }
+                                        }
+                                        break 'suffix;
+                                    }
                                 }
                             }
                         }
@@ -554,6 +576,11 @@ impl<'a> ContentProbe<'a> {
     }
 
     pub(crate) fn has(&self, commit: &str) -> Result<bool> {
+        self.has_range(&format!("{commit}^"), commit)
+    }
+
+    /// Whether everything `from..to` changes is already in the tree.
+    pub(crate) fn has_range(&self, from: &str, to: &str) -> Result<bool> {
         let r = self.repo;
         let patch = r.git.output(
             &r.root,
@@ -563,8 +590,8 @@ impl<'a> ContentProbe<'a> {
                 "--full-index",
                 "--no-color",
                 "--no-ext-diff",
-                &format!("{commit}^"),
-                commit,
+                from,
+                to,
             ],
         )?;
         if !patch.status.success() || patch.stdout.is_empty() {
