@@ -65,8 +65,8 @@ fn deletes_many_branches_and_restores_them_all() {
     assert!(plan.problems.is_empty(), "{plan:?}");
     assert_eq!(
         plan.steps.len(),
-        5,
-        "keep the tips, three local deletions and one push"
+        4,
+        "three local deletions and one push; the tips are in develop, nothing to keep"
     );
 
     let mut op = repo.start_delete(&input).unwrap();

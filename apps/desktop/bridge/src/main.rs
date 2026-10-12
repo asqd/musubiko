@@ -103,8 +103,16 @@ impl State {
     fn journal_upsert(&self, op: &Operation) {
         let _g = self.files.lock().unwrap();
         match self.journal().upsert(op) {
-            Ok(Some(aside)) => eprintln!("bridge: journal set aside to {}", aside.display()),
-            Ok(None) => {}
+            Ok(saved) => {
+                if let Some(aside) = saved.set_aside {
+                    eprintln!("bridge: journal set aside to {}", aside.display());
+                }
+                for d in saved.dropped {
+                    if let (Ok(git), refs) = (self.git(), d.kept_refs()) {
+                        let _ = Repo::open(git, &d.repo).and_then(|r| r.release_kept(&refs));
+                    }
+                }
+            }
             Err(e) => eprintln!("bridge: journal not written: {e}"),
         }
     }
@@ -167,6 +175,11 @@ fn dispatch(st: &State, cmd: &str, a: &Value) -> Result<Value, String> {
             let path: String = arg(a, "path")?;
             let repo = Repo::open(st.git()?, &PathBuf::from(path)).map_err(|e| e.to_string())?;
             let info = repo.info().map_err(|e| e.to_string())?;
+            if let Ok(n) = repo.prune_kept() {
+                if n > 0 {
+                    eprintln!("bridge: pruned {n} kept refs");
+                }
+            }
             *st.repo.lock().unwrap() = Some(repo);
             let _g = st.files.lock().unwrap();
             let mut recent: Vec<String> = read_json("recent.json");
