@@ -1,7 +1,7 @@
 DESKTOP := apps/desktop
 APP := target/release/bundle/macos/Musubiko.app
 
-.PHONY: test check deps dev app run icon branches sandbox clean
+.PHONY: test check deps dev app run icon branches sandbox bridge clean
 
 # Rust tests: branch statuses on throwaway repositories built with the real git.
 test:
@@ -17,6 +17,11 @@ deps:
 # The app with hot reload of the UI.
 dev: deps
 	cd $(DESKTOP) && npx tauri dev
+
+# Dev only: the UI in a browser against the real core, at http://localhost:1420/bridge.html.
+bridge: deps
+	cargo build -q -p musubiko-bridge
+	(cd $(DESKTOP) && npx vite) & target/debug/musubiko-bridge
 
 # Release build of Musubiko.app (unsigned).
 app: deps
