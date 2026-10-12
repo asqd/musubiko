@@ -110,6 +110,10 @@ impl Repo {
             .run(&["symbolic-ref", "--short", "-q", "HEAD"])
             .ok()
             .map(|s| s.trim().to_string());
+        // In a shallow clone the history a branch shares with its base may not be here.
+        let shallow = self
+            .run(&["rev-parse", "--is-shallow-repository"])
+            .is_ok_and(|s| s.trim() == "true");
 
         // Resolve each target once: its full ref, tip and tree.
         let mut targets: HashMap<String, Option<Target>> = HashMap::new();
@@ -151,7 +155,7 @@ impl Repo {
                 } else {
                     base
                 };
-                self.branch(name, r, target, &targets, head.as_deref(), &cache)
+                self.branch(name, r, target, &targets, head.as_deref(), &cache, shallow)
             })
             .collect::<Result<_>>()?;
 
@@ -199,6 +203,7 @@ impl Repo {
         targets: &HashMap<String, Option<Target>>,
         head: Option<&str>,
         cache: &StatusCache,
+        shallow: bool,
     ) -> Result<Computed> {
         let (tip, location, branch_ref) = match (&r.local, &r.remote) {
             (Some(l), Some(_)) => (l.clone(), Location::Both, format!("refs/heads/{name}")),
@@ -265,7 +270,12 @@ impl Repo {
         };
 
         let key = status_key(&out.tip.hash, &t.tip);
-        if let Some(e) = cache.status(&key) {
+        // A shallow clone's "no common history" may be gone after `git fetch --unshallow`
+        // with the same two tips: such answers are neither taken from the cache nor put in it.
+        let cached = cache
+            .status(&key)
+            .filter(|e| !(shallow && matches!(e.status, Status::Unknown { .. })));
+        if let Some(e) = cached {
             out.status = e.status.clone();
             out.ahead = e.ahead;
             out.behind = e.behind;
@@ -292,6 +302,27 @@ impl Repo {
                 out.owner = o.clone();
             }
             out.status = self.merge_status(&t.refname, &t.tree, &branch_ref, &target)?;
+        }
+        if shallow
+            && matches!(out.status, Status::Unknown { .. })
+            && !self.has_merge_base(&t.refname, &branch_ref)
+        {
+            // The counts and the first commit come from a cut history: they mean nothing.
+            out.status = Status::Unknown {
+                error: format!(
+                    "Клон неполный (shallow): общая история с {target} не скачана. \
+                     Скачайте её: git fetch --unshallow"
+                ),
+            };
+            out.ahead = 0;
+            out.behind = 0;
+            out.owner = out.tip.author.clone();
+            self.mark_new(&mut out, r)?;
+            return Ok(Computed {
+                branch: out,
+                status: Lookup::None,
+                sync: sync_lookup,
+            });
         }
         // Every outcome here, "no common history" included, depends only on the two tips.
         // Whether a merged branch is new depends on the branch itself: decided after caching.
@@ -370,6 +401,12 @@ impl Repo {
                 email: email.into(),
             }
         }))
+    }
+
+    fn has_merge_base(&self, a: &str, b: &str) -> bool {
+        self.git
+            .output(&self.root, &["merge-base", a, b])
+            .is_ok_and(|o| o.status.success())
     }
 
     /// Merges in memory with `git merge-tree`; the working tree and index stay untouched.
