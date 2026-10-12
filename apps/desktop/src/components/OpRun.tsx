@@ -1,7 +1,7 @@
 // Running an operation step by step, shared by every dialog that changes the repository.
 import { ReactNode, useEffect, useState } from "react";
 import { revealItemInDir } from "@tauri-apps/plugin-opener";
-import { api, commandOf, errorText, Operation, OpPlan } from "../api";
+import { api, commandOf, errorText, Operation, OpPlan, withoutHints } from "../api";
 import { copyText } from "../format";
 import { CopyReport, ErrorBanner } from "./ErrorBanner";
 import { home, inFileManager } from "../platform";
@@ -66,7 +66,7 @@ export function StepsView({ op }: { op: Operation }) {
               <span className="c">
                 <span className="t">{s.title}</span>
                 <span className="mono">$ {commandOf(s)}</span>
-                {st.kind === "failed" && <span className="out">{st.error}</span>}
+                {st.kind === "failed" && <span className="out">{withoutHints(st.error)}</span>}
               </span>
             </div>
           );

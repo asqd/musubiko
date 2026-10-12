@@ -34,6 +34,9 @@ pub enum LineKind {
 pub struct Line {
     pub kind: LineKind,
     pub text: String,
+    /// The file ends here without a newline ("\ No newline at end of file").
+    #[serde(rename = "noEol", skip_serializing_if = "std::ops::Not::not")]
+    pub no_eol: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -259,12 +262,23 @@ pub(crate) fn parse_patch(text: &str) -> Vec<FileDiff> {
     let (mut old_left, mut new_left) = (0u32, 0u32);
 
     for line in text.split('\n') {
+        // "\ No newline at end of file" follows the line it is about, often after the hunk's
+        // last line was counted.
+        if line.starts_with('\\') {
+            if let Some(l) = files
+                .last_mut()
+                .and_then(|f| f.hunks.last_mut())
+                .and_then(|h| h.lines.last_mut())
+            {
+                l.no_eol = true;
+            }
+            continue;
+        }
         if old_left > 0 || new_left > 0 {
             let Some(f) = files.last_mut() else { break };
             let (kind, body) = match line.as_bytes().first() {
                 Some(b'+') => (LineKind::Add, &line[1..]),
                 Some(b'-') => (LineKind::Del, &line[1..]),
-                Some(b'\\') => continue, // "\ No newline at end of file"
                 Some(b' ') => (LineKind::Context, &line[1..]),
                 _ => (LineKind::Context, ""),
             };
@@ -291,6 +305,7 @@ pub(crate) fn parse_patch(text: &str) -> Vec<FileDiff> {
                 h.lines.push(Line {
                     kind,
                     text: body.strip_suffix('\r').unwrap_or(body).to_string(),
+                    no_eol: false,
                 });
             }
             continue;
@@ -595,6 +610,14 @@ diff --git \"a/\\321\\204\\320\\260\\320\\271\\320\\273.txt\" \"b/\\321\\204\\32
                 ("gone.rb", None, FileChange::Deleted, false, 0, 1),
                 ("файл.txt", None, FileChange::Modified, false, 1, 1),
             ]
+        );
+        let gone = &files[4].hunks[0].lines;
+        assert!(gone[0].no_eol, "the marker belongs to the line before it");
+        assert!(files[0].hunks[0].lines.iter().all(|l| !l.no_eol));
+        assert_eq!(
+            files[5].hunks[0].lines.len(),
+            2,
+            "the marker is not a line itself"
         );
         let h = &files[0].hunks[0];
         assert_eq!(
