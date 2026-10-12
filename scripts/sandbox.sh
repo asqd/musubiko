@@ -13,10 +13,11 @@ set -euo pipefail
 DEST=${1:-/tmp/musubiko-sandbox}
 MARK=.musubiko-sandbox
 
-# The same git the app would choose: the newest one, at least 2.38.
+# The same git the app would choose: $MUSUBIKO_GIT if set, else the newest one; at least 2.38.
 pick_git() {
-  local best="" best_v=0 bin v
-  for bin in ${MUSUBIKO_GIT:-} $(which -a git 2>/dev/null) /opt/homebrew/bin/git /usr/local/bin/git /usr/bin/git; do
+  local best="" best_v=0 bin v candidates
+  candidates=${MUSUBIKO_GIT:-$(which -a git 2>/dev/null) /opt/homebrew/bin/git /usr/local/bin/git /usr/bin/git}
+  for bin in $candidates; do
     [ -x "$bin" ] || continue
     v=$("$bin" --version 2>/dev/null | awk '{split($3, p, "."); printf "%d%03d%03d", p[1], p[2], p[3]}')
     [ -n "$v" ] && [ "$v" -gt "$best_v" ] && best=$bin best_v=$v
