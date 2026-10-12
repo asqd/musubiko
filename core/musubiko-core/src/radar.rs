@@ -4,7 +4,8 @@
 //!
 //! Equivalence is by `git patch-id`: a cherry-picked commit has a different hash but the same
 //! patch, so it counts as carried over. A cherry-pick whose conflicts were resolved by hand
-//! changes the patch and shows up as missing.
+//! changes the patch; it is still found by the `(cherry picked from commit …)` line that
+//! `cherry-pick -x` (and so Musubiko's own carrying over) leaves in the message.
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -174,15 +175,16 @@ impl Repo {
                     .and_then(|c| c.first().map(|c| c.date))
             })
             .min();
-        let develop_ids: HashMap<String, String> = match (oldest, &develop_ref) {
-            (Some(t), Some(dr)) => self
-                .patch_ids(&[
-                    "--max-count=5000",
-                    &format!("--since={}", t - 7 * 86_400),
-                    dr,
-                ])?
+        let since = oldest.map(|t| format!("--since={}", t - 7 * 86_400));
+        let develop_ids: HashMap<String, String> = match (&since, &develop_ref) {
+            (Some(since), Some(dr)) => self
+                .patch_ids(&["--max-count=5000", since, dr])?
                 .into_iter()
                 .collect(),
+            _ => HashMap::new(),
+        };
+        let develop_picks: HashMap<String, String> = match (&since, &develop_ref) {
+            (Some(since), Some(dr)) => self.picked_from(&["--max-count=5000", since, dr])?,
             _ => HashMap::new(),
         };
 
@@ -207,25 +209,37 @@ impl Repo {
                         Some(r) => self.patch_ids(&[r])?.into_iter().collect(),
                         None => HashMap::new(),
                     };
+                    let dev_picks: HashMap<String, String> = match &d_range {
+                        Some(r) => self.picked_from(&[r])?,
+                        None => HashMap::new(),
+                    };
                     let dev_branch =
                         format!("{}{slug}{}", self.flow.hotfix_prefix, self.flow.dev_suffix);
                     let commits: Vec<PairCommit> = commits
                         .into_iter()
                         .map(|commit| {
                             let pid = own_ids.get(&commit.hash);
-                            let ported = pid.and_then(|p| {
-                                dev_ids
-                                    .get(p)
+                            let by_patch = pid.and_then(|p| {
+                                dev_ids.get(p).map(|h| (h, dev_branch.clone())).or_else(|| {
+                                    develop_ids.get(p).map(|h| (h, self.flow.develop.clone()))
+                                })
+                            });
+                            // Changed while carrying over (a resolved conflict): the -x line.
+                            let by_line = || {
+                                dev_picks
+                                    .get(&commit.hash)
                                     .map(|h| (h, dev_branch.clone()))
                                     .or_else(|| {
-                                        develop_ids.get(p).map(|h| (h, self.flow.develop.clone()))
+                                        develop_picks
+                                            .get(&commit.hash)
+                                            .map(|h| (h, self.flow.develop.clone()))
                                     })
-                                    .map(|(h, place)| Ported {
-                                        short: h[..7.min(h.len())].to_string(),
-                                        hash: h.clone(),
-                                        place,
-                                        by_content: false,
-                                    })
+                            };
+                            let ported = by_patch.or_else(by_line).map(|(h, place)| Ported {
+                                short: h[..7.min(h.len())].to_string(),
+                                hash: h.clone(),
+                                place,
+                                by_content: false,
                             });
                             PairCommit { commit, ported }
                         })
@@ -453,6 +467,35 @@ impl Repo {
             .output(&self.root, &["merge-base", "--is-ancestor", a, b])?
             .status
             .success())
+    }
+
+    /// Original → copy for each commit `git log` selects with `args` whose message says
+    /// `(cherry picked from commit <original>)`.
+    pub(crate) fn picked_from(&self, args: &[&str]) -> Result<HashMap<String, String>> {
+        const LINE: &str = "(cherry picked from commit ";
+        let mut all = vec![
+            "log",
+            "--fixed-strings",
+            "--grep=cherry picked from commit ",
+            "--format=%H%x00%B%x01",
+        ];
+        all.extend_from_slice(args);
+        let out = self.run(&all)?;
+        let mut map = HashMap::new();
+        for entry in out.split('\u{1}') {
+            let Some((copy, body)) = entry.trim_start().split_once('\0') else {
+                continue;
+            };
+            for line in body.lines() {
+                if let Some(rest) = line.trim().strip_prefix(LINE) {
+                    let original = rest.trim_end_matches(')').trim();
+                    if original.len() >= 7 && original.chars().all(|c| c.is_ascii_hexdigit()) {
+                        map.insert(original.to_string(), copy.to_string());
+                    }
+                }
+            }
+        }
+        Ok(map)
     }
 
     /// `(patch id, commit)` for each non-merge commit `git log` selects with `args`.
