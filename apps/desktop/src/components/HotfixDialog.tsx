@@ -3,7 +3,7 @@ import { After, api, errorText, HotfixPlan, RepoInfo } from "../api";
 import { ago } from "../format";
 import { FlameIcon } from "./Icons";
 import { Dialog, OpDone, RunFooter, StepsView, useOpRunner } from "./OpRun";
-import DirtyChoice from "./DirtyChoice";
+import DirtyChoice, { useFreshInfo, useWorkMode } from "./DirtyChoice";
 import { ErrorBanner } from "./ErrorBanner";
 
 interface Props {
@@ -13,13 +13,11 @@ interface Props {
   onChanged: () => void;
 }
 
-type Mode = "worktree" | "switch";
-
-export default function HotfixDialog({ info, onClose, onChanged }: Props) {
-  const dirty = info.changes.length;
+export default function HotfixDialog({ info: screenInfo, onClose, onChanged }: Props) {
+  const info = useFreshInfo(screenInfo);
   const [name, setName] = useState("");
   const [push, setPush] = useState(true);
-  const [mode, setMode] = useState<Mode>(dirty ? "worktree" : "switch");
+  const [mode, setMode] = useWorkMode(info);
   const [stay, setStay] = useState(false);
   const [plan, setPlan] = useState<HotfixPlan | null>(null);
   const runner = useOpRunner(onChanged);
