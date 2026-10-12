@@ -166,6 +166,11 @@ impl Repo {
         &self.flow
     }
 
+    /// Whether there is a branch with this name, here or on the remote.
+    pub fn has_branch(&self, name: &str) -> Result<bool> {
+        Ok(self.refs()?.contains_key(name))
+    }
+
     /// develop when the repository has it, otherwise master.
     pub fn default_base(&self) -> Result<String> {
         let refs = self.refs()?;
