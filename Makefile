@@ -3,9 +3,10 @@ APP := target/release/bundle/macos/Musubiko.app
 
 .PHONY: test check deps dev app run icon branches sandbox bridge clean
 
-# Rust tests: branch statuses on throwaway repositories built with the real git.
+# Rust tests: branch statuses on throwaway repositories built with the real git, and the
+# app's own (the log and the error report).
 test:
-	cargo test --workspace --exclude musubiko-app
+	cargo test --workspace
 
 # Rust tests plus a TypeScript type check of the UI.
 check: test deps

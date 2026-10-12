@@ -139,7 +139,7 @@ docs/PLAN.md         план разработки
 Нужны Rust (1.88+), Node.js 20+ и Xcode Command Line Tools.
 
 ```bash
-make test     # тесты ядра на временных репозиториях
+make test     # тесты ядра на временных репозиториях и приложения (лог, отчёт)
 make dev      # приложение с горячей перезагрузкой интерфейса
 make run      # Release-сборка Musubiko.app и запуск
 make icon     # перерисовать иконку из design/make-icon.swift
@@ -151,7 +151,7 @@ make icon     # перерисовать иконку из design/make-icon.swif
 
 Их собирает GitHub Actions ([.github/workflows/build.yml](.github/workflows/build.yml)):
 
-- на каждый push — тесты ядра на Windows и Linux (на macOS они идут локально);
+- на каждый push — тесты ядра и приложения на Windows и Linux (на macOS они идут локально);
 - по кнопке Actions → Build → Run workflow — установщики, они появляются в артефактах запуска;
 - на тег `v*` (`git tag v0.2.0 && git push --tags`) — то же плюс черновик релиза с установщиками.
 
