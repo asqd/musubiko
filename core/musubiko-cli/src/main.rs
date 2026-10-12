@@ -490,6 +490,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 fn status_word(s: &Status) -> String {
     match s {
         Status::Merged => "merged".to_string(),
+        Status::New => "new".to_string(),
         Status::Squashed => "squashed".to_string(),
         Status::Conflict { files } => format!("conflict ({})", files.len()),
         Status::Open => "open".to_string(),

@@ -50,6 +50,7 @@ function grouped(list: Branch[], info: RepoInfo): Branch[] {
 const PILL: Record<Status["kind"], [string, string]> = {
   open: ["не слита", "open"],
   merged: ["слита", "ok"],
+  new: ["без коммитов", "mute"],
   squashed: ["слита · squash", "sq"],
   conflict: ["конфликт", "bad"],
   unknown: ["?", "mute"],
@@ -59,6 +60,7 @@ export function StatusPill({ status, target }: { status: Status; target: string 
   const [label, cls] = PILL[status.kind];
   let title = "";
   if (status.kind === "merged") title = `Все коммиты ветки уже в ${target}`;
+  if (status.kind === "new") title = "Ветку создали, но своих коммитов в ней ещё нет";
   if (status.kind === "squashed")
     title = `Коммиты другие (squash или rebase), но всё содержимое уже в ${target}. Проверено через git merge-tree.`;
   if (status.kind === "conflict")

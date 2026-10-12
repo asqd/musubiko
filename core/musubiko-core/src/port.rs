@@ -274,7 +274,7 @@ impl Repo {
         let mut keep: Vec<(String, String)> = Vec::new();
         let unmerged: Vec<&str> = statuses
             .iter()
-            .filter(|b| !matches!(b.status, Status::Merged | Status::Squashed))
+            .filter(|b| !matches!(b.status, Status::Merged | Status::Squashed | Status::New))
             .map(|b| b.name.as_str())
             .collect();
         if !unmerged.is_empty() {

@@ -31,6 +31,9 @@ pub struct Sync {
 pub enum Status {
     /// Every commit of the branch is in the base.
     Merged,
+    /// Created and never committed to: no commits of its own yet. Told apart from a
+    /// fast-forward merge by the branch's reflog, which only records its creation.
+    New,
     /// The commits differ (squash or rebase merge), but merging would not change the base:
     /// all of the branch's content is already there.
     Squashed,
@@ -269,6 +272,7 @@ impl Repo {
             if let Some(o) = &e.owner {
                 out.owner = o.clone();
             }
+            self.mark_new(&mut out, r)?;
             return Ok(Computed {
                 branch: out,
                 status: Lookup::Hit(key),
@@ -290,6 +294,7 @@ impl Repo {
             out.status = self.merge_status(&t.refname, &t.tree, &branch_ref, &target)?;
         }
         // Every outcome here, "no common history" included, depends only on the two tips.
+        // Whether a merged branch is new depends on the branch itself: decided after caching.
         let status = Lookup::Computed(
             key,
             CachedStatus {
@@ -300,11 +305,52 @@ impl Repo {
                 used: cache::now(),
             },
         );
+        self.mark_new(&mut out, r)?;
         Ok(Computed {
             branch: out,
             status,
             sync: sync_lookup,
         })
+    }
+
+    /// A "merged" local branch whose reflog only records how it was made (created, maybe
+    /// renamed) never had a commit: it is new, and its owner is whoever created it.
+    fn mark_new(&self, b: &mut Branch, r: &Refs) -> Result<()> {
+        if b.status != Status::Merged || r.local.is_none() {
+            return Ok(());
+        }
+        let out = self.git.output(
+            &self.root,
+            &[
+                "reflog",
+                "show",
+                "--format=%gs%x00%gn%x00%ge",
+                &format!("refs/heads/{}", b.name),
+                "--",
+            ],
+        )?;
+        let log = String::from_utf8_lossy(&out.stdout);
+        let entries: Vec<Vec<&str>> = log
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(|l| l.split('\0').collect())
+            .collect();
+        let made = |e: &Vec<&str>| {
+            e[0].starts_with("branch: Created from") || e[0].starts_with("Branch: renamed")
+        };
+        if !out.status.success() || entries.is_empty() || !entries.iter().all(made) {
+            return Ok(());
+        }
+        // Oldest entry: the creation.
+        let first = entries.last().expect("not empty");
+        b.status = Status::New;
+        if let (Some(name), Some(email)) = (first.get(1), first.get(2)) {
+            b.owner = Person {
+                name: name.to_string(),
+                email: email.to_string(),
+            };
+        }
+        Ok(())
     }
 
     /// Author of the oldest commit that is in `branch` and not in `target`.

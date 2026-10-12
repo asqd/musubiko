@@ -5,7 +5,7 @@
 
 Runs `musubiko branches --json` and, for every branch, recomputes with git: which ref is the
 branch, which base it is compared with, ahead/behind, the status (merged, squashed, conflict and
-its files, open), sync with the remote copy, a gone upstream, the owner and HEAD. Also checks that
+its files, open, new — created and never committed to), sync with the remote copy, a gone upstream, the owner and HEAD. Also checks that
 no branch is missing from the list. Exits 1 when something differs.
 
 Two kinds of output: DIFF — Musubiko disagrees with git; NOTE — they agree, but git sees
@@ -184,9 +184,18 @@ for b in listed:
     if (b["ahead"], b["behind"]) != (ahead, behind):
         diff(name, "ahead/behind", (b["ahead"], b["behind"]), (ahead, behind))
 
+    creator = None
     if ahead == 0:
         assert git("merge-base", "--is-ancestor", bref, tref, ok=(0, 1))[0] == 0
         want = {"kind": "merged"}
+        if "local" in e:
+            code, log = git("reflog", "show", "--format=%gs%x00%ge", f"refs/heads/{name}", "--", ok=(0, 128))
+            entries = [l.split("\0") for l in log.splitlines() if l]
+            if code == 0 and entries and all(
+                x[0].startswith(("branch: Created from", "Branch: renamed")) for x in entries
+            ):
+                want = {"kind": "new"}
+                creator = entries[-1][1]
     else:
         code, mt = git("merge-tree", "--write-tree", "-z", "--name-only", "--no-messages", tref, bref, ok=(0, 1, 128))
         lines = mt.split("\0")
@@ -217,7 +226,9 @@ for b in listed:
             note(name, "open, but git cherry finds every commit in the base (rebase or cherry-pick on top of later changes?)")
 
     # Owner: author of the topologically first own commit.
-    if ahead == 0:
+    if creator:
+        owner = creator
+    elif ahead == 0:
         owner = out("log", "-1", "--format=%ae", bref).strip()
     else:
         owner = out("log", "--topo-order", "--reverse", "--format=%ae", f"{tref}..{bref}").split("\n", 1)[0].strip()
