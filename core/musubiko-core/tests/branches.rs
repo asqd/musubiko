@@ -303,3 +303,66 @@ fn the_owner_is_whoever_started_the_branch_whatever_the_commit_dates() {
         "when Ann wrote the first commit"
     );
 }
+
+#[test]
+fn a_shallow_clone_says_the_history_is_missing_until_it_is_fetched() {
+    let f = with_origin();
+    f.git(&["checkout", "-q", "develop"]);
+    for i in 0..5 {
+        f.commit("d.txt", &format!("{i}\n"), &format!("develop {i}"));
+    }
+    f.git(&["checkout", "-q", "-b", "feature/old", "develop~4"]);
+    f.commit("o.txt", "o\n", "old work");
+    f.git(&["push", "-q", "origin", "develop", "feature/old"]);
+    let parent = f.root.parent().unwrap();
+    // --depth needs a URL; on Windows the path is C:\... and wants file:///C:/...
+    let path = parent
+        .join("origin.git")
+        .to_string_lossy()
+        .replace('\\', "/");
+    let url = if path.starts_with('/') {
+        format!("file://{path}")
+    } else {
+        format!("file:///{path}")
+    };
+    f.git_in(
+        parent,
+        &[
+            "clone",
+            "-q",
+            "--depth",
+            "1",
+            "--no-single-branch",
+            &url,
+            "shallow",
+        ],
+    );
+    let dir = parent.join("shallow");
+    let repo = musubiko_core::Repo::open(f.git.clone(), &dir).unwrap();
+
+    let get = |repo: &musubiko_core::Repo| {
+        repo.branches("develop")
+            .unwrap()
+            .into_iter()
+            .find(|b| b.name == "feature/old")
+            .unwrap()
+    };
+    let b = get(&repo);
+    let Status::Unknown { error } = &b.status else {
+        panic!("{:?}", b.status)
+    };
+    assert!(error.contains("git fetch --unshallow"), "{error}");
+    assert_eq!(
+        (b.ahead, b.behind),
+        (0, 0),
+        "counts from a cut history mean nothing"
+    );
+
+    f.git_in(&dir, &["fetch", "-q", "--unshallow"]);
+    let b = get(&repo);
+    assert_eq!(
+        (b.status, b.ahead, b.behind),
+        (Status::Open, 1, 4),
+        "not stuck in the cache"
+    );
+}

@@ -138,6 +138,7 @@ for n in sorted(got_names - expected_names):
     diff(n, "listed", True, False)
 
 head = git("symbolic-ref", "--short", "-q", "HEAD", ok=(0, 1))[1].strip() or None
+shallow = out("rev-parse", "--is-shallow-repository").strip() == "true"
 
 for b in listed:
     name = b["name"]
@@ -179,6 +180,13 @@ for b in listed:
             diff(name, "status", b["status"]["kind"], f"unknown (no {target})")
         continue
 
+    if shallow and git("merge-base", tref, bref, ok=(0, 1))[0] == 1:
+        # The shared history was not fetched: no counts, only "fetch --unshallow".
+        if b["status"]["kind"] != "unknown" or "unshallow" not in b["status"].get("error", ""):
+            diff(name, "status", b["status"], "unknown: shallow")
+        if (b["ahead"], b["behind"]) != (0, 0):
+            diff(name, "ahead/behind", (b["ahead"], b["behind"]), (0, 0))
+        continue
     behind, ahead = left_right(tref, bref)
     if (b["ahead"], b["behind"]) != (ahead, behind):
         diff(name, "ahead/behind", (b["ahead"], b["behind"]), (ahead, behind))
