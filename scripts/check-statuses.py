@@ -9,8 +9,7 @@ its files, open, new — created and never committed to), sync with the remote c
 no branch is missing from the list. Exits 1 when something differs.
 
 Two kinds of output: DIFF — Musubiko disagrees with git; NOTE — they agree, but git sees
-something worth a look (a squash git cherry recognises, an upstream with another name, an owner
-that depends on commit dates).
+something worth a look (a squash git cherry recognises, an upstream with another name).
 """
 
 import argparse
@@ -225,19 +224,16 @@ for b in listed:
         if marks and all(m == "-" for m in marks):
             note(name, "open, but git cherry finds every commit in the base (rebase or cherry-pick on top of later changes?)")
 
-    # Owner: author of the topologically first own commit.
+    # Owner: author of the oldest commit on the branch's own line (first parents, graph order).
     if creator:
         owner = creator
     elif ahead == 0:
         owner = out("log", "-1", "--format=%ae", bref).strip()
     else:
-        owner = out("log", "--topo-order", "--reverse", "--format=%ae", f"{tref}..{bref}").split("\n", 1)[0].strip()
+        line = out("log", "--first-parent", "--topo-order", "--format=%ae", f"{tref}..{bref}").split()
+        owner = line[-1] if line else ""
     if b["owner"]["email"] != owner:
-        by_date = out("log", "--format=%ae", f"{tref}..{bref}").strip().splitlines()
-        if by_date and b["owner"]["email"] == by_date[-1]:
-            note(name, f"owner {b['owner']['email']} by commit date; the first commit topologically is by {owner}")
-        else:
-            diff(name, "owner", b["owner"]["email"], owner)
+        diff(name, "owner", b["owner"]["email"], owner)
 
 print(f"{len(listed)} branches against {chosen} (musubiko {took:.1f}s): {diffs} differ, {notes} notes")
 sys.exit(1 if diffs else 0)

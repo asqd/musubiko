@@ -155,14 +155,19 @@ impl Repo {
                     .unwrap_or(0);
                 let recent =
                     self.log(&["--no-merges", &format!("--max-count={RECENT}"), &range])?;
-                let started = if commit_count as usize <= RECENT {
-                    recent.last().map(|c| c.date)
-                } else {
-                    self.run(&["log", "--no-merges", "--reverse", "--format=%ct", &range])?
-                        .lines()
-                        .next()
-                        .and_then(|l| l.trim().parse().ok())
-                };
+                // When the first commit of the branch's own line was written: commit dates
+                // are all the rebase's after a rebase.
+                let started = self
+                    .run(&[
+                        "log",
+                        "--first-parent",
+                        "--topo-order",
+                        "--format=%at",
+                        &range,
+                    ])?
+                    .lines()
+                    .rfind(|l| !l.is_empty())
+                    .and_then(|l| l.trim().parse().ok());
                 let (files, added, removed) = self.shortstat(&target_ref, &branch_ref)?;
 
                 let mut attention = Vec::new();
