@@ -17,7 +17,7 @@ fn keeps_operations_newest_first_and_replaces_by_id() {
     let j = Journal::new(dir.path().join("journal.json"));
     let a = op(&f, "a");
     let mut b = op(&f, "b");
-    assert_eq!(j.upsert(&a).unwrap(), None);
+    assert_eq!(j.upsert(&a).unwrap().set_aside, None);
     j.upsert(&b).unwrap();
     b.status = OpStatus::Done;
     j.upsert(&b).unwrap();
@@ -65,7 +65,11 @@ fn sets_a_broken_file_aside_instead_of_overwriting_it() {
     let j = Journal::new(&path);
     assert!(j.list(f.repo().root()).is_empty());
     assert!(path.exists(), "reading leaves it alone");
-    let aside = j.upsert(&op(&f, "after")).unwrap().expect("set aside");
+    let aside = j
+        .upsert(&op(&f, "after"))
+        .unwrap()
+        .set_aside
+        .expect("set aside");
     assert_eq!(std::fs::read(&aside).unwrap(), b"{ this is not a journal");
     assert!(
         aside

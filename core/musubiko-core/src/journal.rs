@@ -17,6 +17,17 @@ const LIMIT: usize = 300;
 
 pub struct Journal {
     path: PathBuf,
+    limit: usize,
+}
+
+/// What a write did besides storing the operation.
+#[derive(Debug, Default)]
+pub struct Saved {
+    /// Where an unreadable journal was set aside, if it had to be.
+    pub set_aside: Option<PathBuf>,
+    /// Operations pushed out by the limit: nothing can undo them any more, so what they keep
+    /// for their undo can go ([`Operation::kept_refs`]).
+    pub dropped: Vec<Operation>,
 }
 
 /// The journal file could not be read as a list of operations.
@@ -24,7 +35,15 @@ struct Broken;
 
 impl Journal {
     pub fn new(path: impl Into<PathBuf>) -> Journal {
-        Journal { path: path.into() }
+        Journal::with_limit(path, LIMIT)
+    }
+
+    /// A journal that keeps `limit` operations instead of the usual 300.
+    pub fn with_limit(path: impl Into<PathBuf>, limit: usize) -> Journal {
+        Journal {
+            path: path.into(),
+            limit,
+        }
     }
 
     /// Operations in one repository, newest first.
@@ -36,9 +55,8 @@ impl Journal {
         self.ops().into_iter().find(|o| o.id == id)
     }
 
-    /// Adds the operation or replaces the stored copy with the same id. Returns where an
-    /// unreadable journal was set aside, if it had to be.
-    pub fn upsert(&self, op: &Operation) -> std::io::Result<Option<PathBuf>> {
+    /// Adds the operation or replaces the stored copy with the same id.
+    pub fn upsert(&self, op: &Operation) -> std::io::Result<Saved> {
         let (mut entries, aside) = match self.entries() {
             Ok(e) => (e, None),
             Err(Broken) => (Vec::new(), Some(self.set_aside()?)),
@@ -51,9 +69,16 @@ impl Journal {
             Some(e) => *e = value,
             None => entries.insert(0, value),
         }
-        entries.truncate(LIMIT);
+        let dropped = entries
+            .split_off(entries.len().min(self.limit))
+            .into_iter()
+            .filter_map(|e| serde_json::from_value(e).ok())
+            .collect();
         self.save(&entries)?;
-        Ok(aside)
+        Ok(Saved {
+            set_aside: aside,
+            dropped,
+        })
     }
 
     fn ops(&self) -> Vec<Operation> {

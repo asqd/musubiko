@@ -60,12 +60,22 @@ async fn open_repo(
     state: State<'_, AppState>,
 ) -> Result<RepoInfo, String> {
     let git = state.git()?;
-    let (repo, info) = blocking(move || {
+    let (repo, info, pruned) = blocking(move || {
         let repo = Repo::open(git, &PathBuf::from(path))?;
         let info = repo.info()?;
-        Ok((repo, info))
+        // Commits kept for undoing deletes that have since reached master or develop.
+        let pruned = repo.prune_kept();
+        Ok((repo, info, pruned))
     })
     .await?;
+    match pruned {
+        Ok(0) => {}
+        Ok(n) => log::write(
+            "",
+            &format!("Убрал {n} сохранённых коммитов: они уже в базе"),
+        ),
+        Err(e) => log::write("WARN", &format!("Не убрал сохранённые коммиты: {e}")),
+    }
     *state.repo.lock().unwrap() = Some(repo);
     log::write("REPO", &info.root.to_string_lossy());
     recent::remember(&app, &info.root);
