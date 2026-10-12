@@ -56,9 +56,33 @@ pub struct Git {
 }
 
 impl Git {
-    /// Picks the newest git among `$MUSUBIKO_GIT`, `$PATH` and the usual install locations.
-    /// An app started from Finder sees a short PATH, so the fixed locations matter.
+    /// The git named by `$MUSUBIKO_GIT` when it is set, otherwise the newest one among `$PATH`
+    /// and the usual install locations. An app started from Finder sees a short PATH, so the
+    /// fixed locations matter.
     pub fn discover() -> Result<Git> {
+        match std::env::var_os("MUSUBIKO_GIT").filter(|p| !p.is_empty()) {
+            Some(p) => Git::chosen(PathBuf::from(p)),
+            None => Git::newest(),
+        }
+    }
+
+    /// Exactly this git, as the user asked for it: an error if it does not run or is too old.
+    pub fn chosen(bin: PathBuf) -> Result<Git> {
+        let path = bin.display().to_string();
+        match version_of(&bin) {
+            Some(v) if v >= MIN_VERSION => Ok(Git { bin, version: v }),
+            Some(v) => Err(Error::ChosenGit {
+                path,
+                problem: format!("это git {}", fmt_version(v)),
+            }),
+            None => Err(Error::ChosenGit {
+                path,
+                problem: "не запускается как git".into(),
+            }),
+        }
+    }
+
+    fn newest() -> Result<Git> {
         let mut found: Vec<(PathBuf, (u32, u32, u32))> = Vec::new();
         for bin in candidates() {
             if found.iter().any(|(b, _)| *b == bin) {
@@ -186,9 +210,6 @@ fn new_command(bin: &Path) -> Command {
 fn candidates() -> Vec<PathBuf> {
     let exe = if cfg!(windows) { "git.exe" } else { "git" };
     let mut list = Vec::new();
-    if let Some(p) = std::env::var_os("MUSUBIKO_GIT") {
-        list.push(PathBuf::from(p));
-    }
     if let Some(path) = std::env::var_os("PATH") {
         list.extend(std::env::split_paths(&path).map(|d| d.join(exe)));
     }
@@ -255,5 +276,33 @@ mod tests {
         );
         assert_eq!(parse_version("git version 2.40"), Some((2, 40, 0)));
         assert_eq!(parse_version("nope"), None);
+    }
+
+    #[test]
+    fn a_chosen_git_is_used_as_is_or_refused() {
+        let ok = Git::discover().expect("a git 2.38+ for the tests");
+        let chosen = Git::chosen(ok.path().to_path_buf()).unwrap();
+        assert_eq!(chosen.path(), ok.path());
+
+        let missing = Git::chosen(PathBuf::from("/no/such/git")).unwrap_err();
+        assert!(
+            missing.to_string().contains("MUSUBIKO_GIT")
+                && missing.to_string().contains("не запускается"),
+            "{missing}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_chosen_git_that_is_too_old_is_refused() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("musubiko-old-git-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let fake = dir.join("git");
+        std::fs::write(&fake, "#!/bin/sh\necho 'git version 2.37.3'\n").unwrap();
+        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let e = Git::chosen(fake).unwrap_err().to_string();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert!(e.contains("это git 2.37.3") && e.contains("2.38"), "{e}");
     }
 }

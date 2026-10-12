@@ -8,6 +8,10 @@ pub enum Error {
     #[error("Не найден git версии {min} или новее. Найдены: {found}. Установите свежий git: {hint}", hint = crate::git::INSTALL_HINT, min = crate::git::fmt_version(crate::MIN_VERSION), found = if found.is_empty() { "ничего".to_string() } else { found.join(", ") })]
     GitNotFound { found: Vec<String> },
 
+    /// `MUSUBIKO_GIT` names a git that cannot be used; it is not silently replaced by another.
+    #[error("В MUSUBIKO_GIT указан {path}: {problem}. Укажите git {min} или новее или уберите переменную", min = crate::git::fmt_version(crate::MIN_VERSION))]
+    ChosenGit { path: String, problem: String },
+
     /// A check before or after a step said no; the message says why.
     #[error("{0}")]
     Refused(String),
