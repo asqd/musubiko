@@ -175,7 +175,9 @@ impl Repo {
                     }),
                     _ => {}
                 }
-                if b.behind >= BEHIND_ALERT {
+                // A new branch has nothing to fall behind with yet, and its date is the base's.
+                let new = b.status == Status::New;
+                if b.behind >= BEHIND_ALERT && !new {
                     attention.push(Attention::Behind { count: b.behind });
                 }
                 if let Some(s) = b.sync {
@@ -190,7 +192,7 @@ impl Repo {
                     attention.push(Attention::GoneWithWork);
                 }
                 let days = (now - b.tip.date) / 86_400;
-                if days >= QUIET_DAYS {
+                if days >= QUIET_DAYS && !new {
                     attention.push(Attention::Quiet { days });
                 }
                 Ok(WorkBranch {

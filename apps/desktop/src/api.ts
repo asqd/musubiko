@@ -24,6 +24,8 @@ export interface Sync {
 
 export type Status =
   | { kind: "merged" }
+  /** Created and never committed to: nothing of its own yet. */
+  | { kind: "new" }
   | { kind: "squashed" }
   | { kind: "conflict"; files: string[] }
   | { kind: "open" }

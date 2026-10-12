@@ -381,7 +381,7 @@ expect flow hotfix/LT-104-done master merged "radar: done, pair can be deleted"
 expect flow hotfix/LT-104-done-dev develop merged
 expect flow hotfix/LT-105-squash master open "radar: carried over by content"
 expect flow hotfix/LT-106-conflict master open "radar: carrying over conflicts in app/c2.txt"
-expect flow hotfix/LT-106-conflict-dev develop merged "no own commits yet"
+expect flow hotfix/LT-106-conflict-dev develop new "no own commits yet"
 expect flow hotfix/LT-107-wip master open "radar: no -dev yet"
 expect flow hotfix/LT-108-fix-on-dev master open "master half whose name ends in -dev"
 expect flow hotfix/LT-108-fix-on-dev-dev develop open "its pair"

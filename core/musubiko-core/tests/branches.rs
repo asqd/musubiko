@@ -175,7 +175,67 @@ fn any_branch_can_be_the_base() {
     );
     let on_top = get("feature/on-top").unwrap();
     assert_eq!(on_top.target, "feature/base");
-    assert_eq!(on_top.status, Status::Merged);
+    assert_eq!(on_top.status, Status::New, "created and never committed to");
     let more = get("feature/more").unwrap();
     assert_eq!((more.status.clone(), more.ahead), (Status::Open, 1));
+}
+
+#[test]
+fn a_branch_without_commits_is_new_and_belongs_to_its_creator() {
+    let f = with_origin();
+    // The base's last commit is someone else's.
+    f.git(&["checkout", "-q", "develop"]);
+    std::fs::write(f.root.join("d.txt"), "d\n").unwrap();
+    f.git(&["add", "d.txt"]);
+    f.git(&[
+        "-c",
+        "user.name=Colleague",
+        "-c",
+        "user.email=colleague@example.com",
+        "commit",
+        "-q",
+        "--author=Colleague <colleague@example.com>",
+        "-m",
+        "colleague's work",
+    ]);
+    f.git(&["push", "-q", "origin", "develop"]);
+    f.git(&["fetch", "-q", "origin"]);
+    // Fresh, as the hotfix and new-branch dialogs make it.
+    let repo = f.repo();
+    repo.run_step(&musubiko_core::Step::new(
+        "x",
+        &["branch", "--no-track", "feature/fresh", "origin/develop"],
+    ))
+    .unwrap();
+    // Merged by fast-forward: had a commit of its own.
+    f.git(&["checkout", "-q", "-b", "feature/ff", "develop"]);
+    f.commit("ff.txt", "ff\n", "ff work");
+    f.git(&["checkout", "-q", "develop"]);
+    f.git(&["merge", "-q", "--ff-only", "feature/ff"]);
+    f.git(&["push", "-q", "origin", "develop"]);
+    f.git(&["fetch", "-q", "origin"]);
+    f.git(&["checkout", "-q", "feature/work"]);
+
+    let list = repo.branches("develop").unwrap();
+    let get = |n: &str| list.iter().find(|b| b.name == n).unwrap();
+    let fresh = get("feature/fresh");
+    assert_eq!(fresh.status, Status::New);
+    assert_eq!(
+        fresh.owner.email, "me@example.com",
+        "the creator, not the base's last author"
+    );
+    assert_eq!(get("feature/ff").status, Status::Merged);
+    assert_eq!(
+        get("feature/work").status,
+        Status::New,
+        "made by with_origin, never committed"
+    );
+
+    // The same answer from the cache.
+    let again = repo.branches("develop").unwrap();
+    let fresh = again.iter().find(|b| b.name == "feature/fresh").unwrap();
+    assert_eq!(
+        (fresh.status.clone(), fresh.owner.email.as_str()),
+        (Status::New, "me@example.com")
+    );
 }
