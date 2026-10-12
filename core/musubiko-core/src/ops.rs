@@ -17,6 +17,9 @@ pub struct Step {
     pub title: String,
     /// Arguments after `git`.
     pub args: Vec<String>,
+    /// Lines fed to git on stdin, one per line (`update-ref --stdin`).
+    #[serde(default)]
+    pub stdin: Option<Vec<String>>,
     /// The step fails with this message when the command prints anything (availability checks).
     #[serde(default)]
     pub fail_if_output: Option<String>,
@@ -82,10 +85,15 @@ pub enum Effect {
         remote: String,
         name: String,
     },
-    /// A local branch at `hash` was deleted; undo recreates it.
+    /// A local branch at `hash` was deleted; undo recreates it with the upstream it had.
     DeleteLocal {
         name: String,
         hash: String,
+    },
+    /// Refs `(refname, hash)` created to keep commits of deleted branches from garbage
+    /// collection while the operation can still be undone; undo removes them.
+    Keep {
+        refs: Vec<(String, String)>,
     },
     /// A remote branch at `hash` was deleted; undo pushes it back.
     DeleteRemote {
@@ -146,6 +154,7 @@ impl Step {
         Step {
             title: title.into(),
             args: args.iter().map(|a| a.to_string()).collect(),
+            stdin: None,
             fail_if_output: None,
             guard: None,
             effect: None,
@@ -158,9 +167,23 @@ impl Step {
         self
     }
 
+    pub fn with_stdin(mut self, lines: Vec<String>) -> Step {
+        self.stdin = Some(lines);
+        self
+    }
+
     /// The command as the user would type it, for previews and the journal.
     pub fn command(&self) -> String {
-        let mut s = String::from("git");
+        let mut s = String::new();
+        if let Some(lines) = &self.stdin {
+            s.push_str("printf '%s\\n'");
+            for l in lines {
+                s.push(' ');
+                s.push_str(&shell_quote(l));
+            }
+            s.push_str(" | ");
+        }
+        s.push_str("git");
         for a in &self.args {
             s.push(' ');
             s.push_str(&shell_quote(a));
@@ -229,9 +252,7 @@ impl Operation {
                 if let Some(Effect::WorktreeRemoved { path }) = &self.steps[i].effect {
                     self.undo.retain(|u| !u.args.contains(path));
                 }
-                if let Some(u) = undo {
-                    self.undo.push(u);
-                }
+                self.undo.extend(undo);
                 if i + 1 == self.steps.len() {
                     self.status = OpStatus::Done;
                 }
@@ -306,8 +327,9 @@ impl Operation {
 }
 
 impl Repo {
-    /// Runs one step; returns git's output and the undo step for what it did.
-    pub fn run_step(&self, step: &Step) -> Result<(String, Option<Step>)> {
+    /// Runs one step; returns git's output and the undo steps for what it did, in the order
+    /// they go on the undo stack (the last one runs first).
+    pub fn run_step(&self, step: &Step) -> Result<(String, Vec<Step>)> {
         if let Some(g) = &step.guard {
             let out = self
                 .git
@@ -325,8 +347,20 @@ impl Repo {
             }
             _ => None,
         };
+        // A deleted branch loses its config: remember the upstream to restore it on undo.
+        let upstream = match &step.effect {
+            Some(Effect::DeleteLocal { name, .. }) => self.upstream_config(name),
+            _ => Vec::new(),
+        };
         let args: Vec<&str> = step.args.iter().map(String::as_str).collect();
-        let out = self.git.output(&self.root, &args)?;
+        let out = match &step.stdin {
+            Some(lines) => {
+                let input = lines.iter().map(|l| format!("{l}\n")).collect::<String>();
+                self.git
+                    .output_with(&self.root, &args, &[], input.into_bytes())?
+            }
+            None => self.git.output(&self.root, &args)?,
+        };
         let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
         let stderr = String::from_utf8_lossy(&out.stderr).trim().to_string();
         if !out.status.success() {
@@ -341,8 +375,8 @@ impl Repo {
             }
         }
         let undo = match &step.effect {
-            None | Some(Effect::WorktreeRemoved { .. }) => None,
-            Some(effect) => Some(self.undo_for(effect, before)?),
+            None | Some(Effect::WorktreeRemoved { .. }) => Vec::new(),
+            Some(effect) => self.undo_for(effect, before, upstream)?,
         };
         // Push and fetch report progress on stderr; keep it for the journal.
         let output = [stdout, stderr]
@@ -370,8 +404,38 @@ impl Repo {
             .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string()))
     }
 
-    fn undo_for(&self, effect: &Effect, before: Option<String>) -> Result<Step> {
-        Ok(match effect {
+    /// `branch.<name>.remote` and `branch.<name>.merge`, as `(key, value)`; empty without one.
+    fn upstream_config(&self, name: &str) -> Vec<(String, String)> {
+        ["remote", "merge"]
+            .iter()
+            .filter_map(|k| {
+                let key = format!("branch.{name}.{k}");
+                let v = self.run(&["config", "--get", &key]).ok()?;
+                Some((key, v.trim().to_string()))
+            })
+            .collect()
+    }
+
+    fn undo_for(
+        &self,
+        effect: &Effect,
+        before: Option<String>,
+        upstream: Vec<(String, String)>,
+    ) -> Result<Vec<Step>> {
+        if let Effect::DeleteLocal { name, hash } = effect {
+            // Pushed so that the branch comes back first, then its upstream.
+            let mut steps: Vec<Step> = upstream
+                .iter()
+                .rev()
+                .map(|(k, v)| Step::new(format!("Вернуть {k}"), &["config", k, v]))
+                .collect();
+            steps.push(Step::new(
+                format!("Восстановить ветку {name}"),
+                &["branch", name, hash],
+            ));
+            return Ok(steps);
+        }
+        Ok(vec![match effect {
             Effect::Branch { name } => {
                 let refname = format!("refs/heads/{name}");
                 Step {
@@ -454,9 +518,15 @@ impl Repo {
                     ),
                 }
             }
-            Effect::DeleteLocal { name, hash } => Step::new(
-                format!("Восстановить ветку {name}"),
-                &["branch", name, hash],
+            Effect::DeleteLocal { .. } => unreachable!("handled above"),
+            Effect::Keep { refs } => Step::new(
+                "Убрать сохранённые коммиты: ветки вернулись",
+                &["update-ref", "--stdin"],
+            )
+            .with_stdin(
+                refs.iter()
+                    .map(|(r, h)| format!("delete {r} {h}"))
+                    .collect(),
             ),
             Effect::DeleteRemote { remote, name, hash } => Step::new(
                 format!("Восстановить {name} на {remote}"),
@@ -474,7 +544,7 @@ impl Repo {
                     )
                 }
             }
-        })
+        }])
     }
 }
 
@@ -499,6 +569,19 @@ mod tests {
         assert_eq!(
             s.command(),
             "git branch --no-track hotfix/LT-1-fix origin/master"
+        );
+    }
+
+    #[test]
+    fn shows_stdin_as_a_pipe() {
+        let s = Step::new("x", &["update-ref", "--stdin"]).with_stdin(vec![
+            "create refs/musubiko/deleted/1/local/feature/x abc".into(),
+            "create refs/musubiko/deleted/1/remote/feature/x abc".into(),
+        ]);
+        assert_eq!(
+            s.command(),
+            "printf '%s\\n' 'create refs/musubiko/deleted/1/local/feature/x abc' \
+             'create refs/musubiko/deleted/1/remote/feature/x abc' | git update-ref --stdin"
         );
     }
 }

@@ -220,6 +220,8 @@ export interface NewBranchPlan {
 export interface Step {
   title: string;
   args: string[];
+  /** Lines fed to git on stdin (`update-ref --stdin`). */
+  stdin?: string[] | null;
   /** Set on steps that can stop half-way and be finished by hand (a cherry-pick). */
   resume?: { kind: "cherryPick"; dir: string } | null;
 }
@@ -370,7 +372,9 @@ export interface CheckoutPlan extends OpPlan {
 
 /** The command line a step runs, as shown to the user. */
 export function commandOf(step: Step): string {
-  return ["git", ...step.args.map((a) => (/^[\w\-./:=@^~+,%]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`))].join(" ");
+  const quote = (a: string) => (/^[\w\-./:=@^~+,%]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
+  const git = ["git", ...step.args.map(quote)].join(" ");
+  return step.stdin ? `${["printf", "'%s\\n'", ...step.stdin.map(quote)].join(" ")} | ${git}` : git;
 }
 
 export interface Settings {

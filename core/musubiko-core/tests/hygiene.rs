@@ -63,7 +63,11 @@ fn deletes_many_branches_and_restores_them_all() {
     };
     let plan = repo.plan_delete(&input).unwrap();
     assert!(plan.problems.is_empty(), "{plan:?}");
-    assert_eq!(plan.steps.len(), 4, "three local deletions and one push");
+    assert_eq!(
+        plan.steps.len(),
+        5,
+        "keep the tips, three local deletions and one push"
+    );
 
     let mut op = repo.start_delete(&input).unwrap();
     run(&mut op, &repo);

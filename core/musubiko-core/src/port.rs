@@ -266,6 +266,12 @@ impl Repo {
         let mut warnings = Vec::new();
         let mut steps = Vec::new();
         let mut remote_items: Vec<(String, String)> = Vec::new();
+        // Refs that keep the deleted tips from garbage collection, so undo works even weeks later.
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let mut keep: Vec<(String, String)> = Vec::new();
         let unmerged: Vec<&str> = statuses
             .iter()
             .filter(|b| !matches!(b.status, Status::Merged | Status::Squashed))
@@ -273,7 +279,8 @@ impl Repo {
             .collect();
         if !unmerged.is_empty() {
             warnings.push(format!(
-                "Не слиты: {}. Их коммиты останутся только в журнале",
+                "Не слиты: {}. Их коммиты сохраню в refs/musubiko/deleted: отмена из журнала \
+                 вернёт ветки",
                 unmerged.join(", ")
             ));
         }
@@ -292,6 +299,10 @@ impl Repo {
                 } else if let Some(p) = self.checked_out_in(name)? {
                     problems.push(format!("{name} открыта в папке {}", p.display()));
                 }
+                keep.push((
+                    format!("refs/musubiko/deleted/{stamp}/local/{name}"),
+                    l.hash.clone(),
+                ));
                 let refname = format!("refs/heads/{name}");
                 steps.push(
                     Step {
@@ -311,6 +322,10 @@ impl Repo {
                 );
             }
             if let (true, Some(_), Some(t)) = (input.remote, &self.remote, &r.remote) {
+                keep.push((
+                    format!("refs/musubiko/deleted/{stamp}/remote/{name}"),
+                    t.hash.clone(),
+                ));
                 remote_items.push((name.clone(), t.hash.clone()));
             }
         }
@@ -363,6 +378,21 @@ impl Repo {
         }
         if steps.is_empty() && problems.is_empty() {
             problems.push("Удалять нечего: отметьте, где удалять".into());
+        }
+        if !keep.is_empty() {
+            steps.insert(
+                0,
+                Step::new(
+                    "Сохранить коммиты веток, чтобы их можно было вернуть",
+                    &["update-ref", "--stdin"],
+                )
+                .with_stdin(
+                    keep.iter()
+                        .map(|(r, h)| format!("create {r} {h}"))
+                        .collect(),
+                )
+                .with_effect(Effect::Keep { refs: keep }),
+            );
         }
         let n = input.names.len();
         let title = if n == 1 {
