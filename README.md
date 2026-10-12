@@ -139,6 +139,8 @@ core/
 apps/desktop/        приложение: React + TypeScript (src/), Tauri (src-tauri/)
 design/              иконка: скрипт отрисовки и мастер 1024 × 1024
 docs/PLAN.md         план разработки
+site/                страница на GitHub Pages (русская в корне, английская в en/): чистый HTML,
+                     публикуется .github/workflows/pages.yml
 ```
 
 ## Сборка
