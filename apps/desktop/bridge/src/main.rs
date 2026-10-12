@@ -14,7 +14,7 @@ use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use musubiko_core::{Git, OpStatus, Operation, Repo};
+use musubiko_core::{Git, Journal, OpStatus, Operation, Repo};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -96,15 +96,17 @@ impl State {
             .push(json!({ "kind": kind, "args": args }));
     }
 
+    fn journal(&self) -> Journal {
+        Journal::new(data_dir().join("journal.json"))
+    }
+
     fn journal_upsert(&self, op: &Operation) {
         let _g = self.files.lock().unwrap();
-        let mut ops: Vec<Operation> = read_json("journal.json");
-        match ops.iter_mut().find(|o| o.id == op.id) {
-            Some(o) => *o = op.clone(),
-            None => ops.insert(0, op.clone()),
+        match self.journal().upsert(op) {
+            Ok(Some(aside)) => eprintln!("bridge: journal set aside to {}", aside.display()),
+            Ok(None) => {}
+            Err(e) => eprintln!("bridge: journal not written: {e}"),
         }
-        ops.truncate(300);
-        write_json("journal.json", &ops);
     }
 
     fn busy(&self) -> bool {
@@ -280,17 +282,11 @@ fn dispatch(st: &State, cmd: &str, a: &Value) -> Result<Value, String> {
             ok(())
         }
         "journal_list" => {
-            let root = st.repo()?.root().to_path_buf();
-            let ops: Vec<Operation> = read_json("journal.json");
-            ok(ops.into_iter().filter(|o| o.repo == root).collect::<Vec<_>>())
+            ok(st.journal().list(st.repo()?.root()))
         }
         "journal_undo" => {
             let id: String = arg(a, "id")?;
-            let ops: Vec<Operation> = read_json("journal.json");
-            let mut op = ops
-                .into_iter()
-                .find(|o| o.id == id)
-                .ok_or("Операции нет в журнале")?;
+            let mut op = st.journal().get(&id).ok_or("Операции нет в журнале")?;
             let repo = Repo::open(st.git()?, &op.repo).map_err(|e| e.to_string())?;
             op.undo_all(&repo, OpStatus::Undone);
             st.journal_upsert(&op);
