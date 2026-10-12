@@ -17,6 +17,16 @@ interface Props {
   onChanged: () => void;
 }
 
+/** The field starts with a suggested prefix; a name typed or pasted with its own prefix
+ * ("feature/LT-1 …" after "feature/") replaces it instead of making "feature/feature/LT-1". */
+export function withoutDoubledPrefix(value: string, prefixes: string[]): string {
+  for (const p of prefixes) {
+    const rest = value.slice(p.length);
+    if (value.startsWith(p) && prefixes.some((q) => rest.startsWith(q))) return rest;
+  }
+  return value;
+}
+
 /** The prefixes this repository's branches use most, e.g. feature/, bugfix/. */
 function usualPrefixes(branches: Branch[], hotfixPrefix: string): string[] {
   const count = new Map<string, number>();
@@ -135,7 +145,7 @@ export default function NewBranchDialog({ info: screenInfo, base: initialBase, b
               id="nb-name"
               ref={inputRef}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => setName(withoutDoubledPrefix(e.target.value, prefixes))}
               placeholder="feature/Project-12 новая форма"
               autoComplete="off"
               spellCheck={false}
