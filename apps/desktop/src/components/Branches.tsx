@@ -338,7 +338,7 @@ export default function Branches({ info, tick, active, onOpen, onChanged, onChec
                 <th>Статус</th>
                 <th title="Коммитов впереди / позади целевой ветки">↑ ↓</th>
                 <th>Автор</th>
-                <th>Последний коммит</th>
+                <th className="fill">Последний коммит</th>
                 <th>Обновлена</th>
                 <th />
               </tr>
@@ -436,7 +436,7 @@ function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen, onCheckou
       <td>
         <div className="bname">
           {b.isHead ? <span className="hd" title="HEAD" /> : <span className="nohd" />}
-          <span>
+          <span className="nm" title={b.name}>
             <span className="pre">{pre}</span>
             {rest}
           </span>
@@ -462,7 +462,7 @@ function Row({ b, info, base, now, selected, onSelect, onCopy, onOpen, onCheckou
         <span className="b">↓{b.behind}</span>
       </td>
       <td title={b.owner.email}>{owner}</td>
-      <td>
+      <td className="fill">
         <div className="commit">
           <button
             className="hash"

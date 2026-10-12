@@ -175,6 +175,8 @@ table.br.stale-data { opacity: .6; }
 .br tbody tr:hover, .br tbody tr:focus-visible { background: var(--sunken); outline: none; }
 .bname { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 13px; user-select: text; }
 .bname .pre { color: var(--faint); }
+/* One very long name must not push every row's status and author out of view. */
+.bname .nm { display: inline-block; max-width: 42ch; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; }
 .bname .hd { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); flex: none; }
 .bname .nohd { width: 8px; flex: none; }
 tr.pair .bname .nohd { width: 12px; height: 10px; border-left: 1.5px solid var(--line-strong); border-bottom: 1.5px solid var(--line-strong); margin: -8px 0 0 4px; }
@@ -197,6 +199,12 @@ tr.pair .bname .nohd { width: 12px; height: 10px; border-left: 1.5px solid var(-
 .ab .b { color: var(--faint); margin-left: 8px; }
 .commit { display: flex; gap: 8px; align-items: baseline; max-width: 420px; }
 .commit .msg { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+/* The commit column takes what is left and gives way first, so the table fits the window. */
+.br th.fill, .br td.fill { width: 100%; }
+.br th.fill { max-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.br td.fill .commit { max-width: none; }
+.br td.fill .commit .hash { flex: none; }
+.br td.fill .commit .msg { flex: 1; width: 0; white-space: nowrap; }
 .hash { font: 12.5px var(--mono); color: var(--accent); background: none; border: 0; padding: 0; }
 .hash:hover { text-decoration: underline; }
 td.acts { text-align: right; width: 1%; white-space: nowrap; }
