@@ -46,22 +46,37 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut local = false;
     let mut push_new = false;
     let mut author: Option<String> = None;
+    // A flag's value; a flag at the end with nothing after it is a mistake, not an empty value.
+    let value = |args: &mut std::iter::Skip<std::env::Args>, flag: &str| {
+        args.next()
+            .filter(|v| !v.starts_with("--"))
+            .ok_or_else(|| format!("после {flag} нужно значение"))
+    };
     while let Some(a) = args.next() {
         match a.as_str() {
-            "--base" => base = args.next(),
+            "--base" => base = Some(value(&mut args, "--base")?),
             "--json" => json = true,
             "-w" => ignore_ws = true,
             "--no-push" => push = false,
             "--run" => execute = true,
             "--local" => local = true,
             "--push" => push_new = true,
-            "--author" => author = args.next(),
+            "--author" => author = Some(value(&mut args, "--author")?),
             "--after" => {
-                after = match args.next().as_deref() {
-                    Some("worktree") => After::Worktree,
-                    Some("switch") => After::Switch,
-                    _ => After::Stay,
+                after = match value(&mut args, "--after")?.as_str() {
+                    "worktree" => After::Worktree,
+                    "switch" => After::Switch,
+                    "stay" => After::Stay,
+                    other => {
+                        return Err(
+                            format!("--after {other}: бывает worktree, switch или stay").into()
+                        );
+                    }
                 }
+            }
+            // Before positional arguments: an unknown flag must not become a path or a name.
+            _ if a.starts_with("--") => {
+                return Err(format!("неизвестный флаг {a}; флаги описаны в начале main.rs").into());
             }
             _ if matches!(
                 cmd.as_str(),
@@ -76,6 +91,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let git = Git::discover()?;
     let repo = Repo::open(git, &path)?;
+    if let Some(b) = &base {
+        if !repo.has_branch(b)? {
+            return Err(format!("Нет ветки {b}, сравнивать не с чем").into());
+        }
+    }
     match cmd.as_str() {
         "info" => {
             let info = repo.info()?;
@@ -479,7 +499,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         other => {
             return Err(format!(
-                "неизвестная команда {other}; есть branches, diff, conflicts, hotfix, radar, where и info"
+                "неизвестная команда {other}; есть branches, info, diff, conflicts, card, mine, \
+                 hotfix, new, radar и where"
             )
             .into());
         }

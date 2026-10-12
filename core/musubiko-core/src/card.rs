@@ -40,6 +40,11 @@ pub struct BranchCard {
 
 impl Repo {
     pub fn branch_card(&self, name: &str, base: &str) -> Result<BranchCard> {
+        if self.flow.is_base(name) || name == base {
+            return Err(Error::Refused(format!(
+                "{name} — база сравнения: карточка есть у веток, которые с ней сравнивают"
+            )));
+        }
         let branch = self
             .branches_where(base, |n| n == name)?
             .pop()
