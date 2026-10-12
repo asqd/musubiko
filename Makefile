@@ -1,7 +1,7 @@
 DESKTOP := apps/desktop
 APP := target/release/bundle/macos/Musubiko.app
 
-.PHONY: test check deps dev app run icon branches clean
+.PHONY: test check deps dev app run icon branches sandbox clean
 
 # Rust tests: branch statuses on throwaway repositories built with the real git.
 test:
@@ -34,6 +34,10 @@ icon: deps
 # What the app would show for a repository: make branches REPO=~/work/project [BASE=master]
 branches:
 	cargo run -q -p musubiko-cli -- branches $(or $(REPO),.) $(if $(BASE),--base $(BASE))
+
+# Test bench from docs/TESTING.md: throwaway repositories in /tmp/musubiko-sandbox.
+sandbox:
+	scripts/sandbox.sh
 
 clean:
 	cargo clean
