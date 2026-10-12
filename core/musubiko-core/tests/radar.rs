@@ -357,3 +357,33 @@ fn a_port_with_a_resolved_conflict_counts_as_carried_over() {
         "points at the copy"
     );
 }
+
+#[test]
+fn a_master_half_whose_name_ends_in_dev_pairs_with_its_own_dev() {
+    let f = with_origin();
+    f.git(&["checkout", "-q", "-b", "hotfix/LT-8-fix-on-dev", "master"]);
+    f.commit("h8.txt", "8\n", "fix 8");
+    let fix = head(&f);
+    f.git(&[
+        "checkout",
+        "-q",
+        "-b",
+        "hotfix/LT-8-fix-on-dev-dev",
+        "develop",
+    ]);
+    f.git(&["cherry-pick", "-x", &fix]);
+    f.git(&["checkout", "-q", "feature/work"]);
+    let repo = f.repo();
+
+    let list = repo.branches("develop").unwrap();
+    let target = |n: &str| list.iter().find(|b| b.name == n).unwrap().target.clone();
+    assert_eq!(target("hotfix/LT-8-fix-on-dev"), "master");
+    assert_eq!(target("hotfix/LT-8-fix-on-dev-dev"), "develop");
+
+    let radar = repo.hotfix_radar().unwrap();
+    let slugs: Vec<&str> = radar.pairs.iter().map(|p| p.slug.as_str()).collect();
+    assert_eq!(slugs, ["LT-8-fix-on-dev"], "one pair, no phantom");
+    let pair = &radar.pairs[0];
+    assert_eq!(pair.state, PairState::Work);
+    assert_eq!(pair.unsynced, 0);
+}
