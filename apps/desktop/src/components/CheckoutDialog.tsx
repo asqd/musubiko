@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, Branch, CheckoutPlan, errorText, RepoInfo } from "../api";
 import { StatusPill } from "./Branches";
-import DirtyChoice, { WorkMode } from "./DirtyChoice";
+import DirtyChoice, { useFreshInfo, useWorkMode } from "./DirtyChoice";
 import { Dialog, OpDone, PlanView, RunFooter, StepsView, useOpRunner } from "./OpRun";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -12,8 +12,9 @@ interface Props {
   onChanged: () => void;
 }
 
-export default function CheckoutDialog({ info, branch, onClose, onChanged }: Props) {
-  const [mode, setMode] = useState<WorkMode>(info.changes.length ? "worktree" : "switch");
+export default function CheckoutDialog({ info: screenInfo, branch, onClose, onChanged }: Props) {
+  const info = useFreshInfo(screenInfo);
+  const [mode, setMode] = useWorkMode(info);
   const [restore, setRestore] = useState(true);
   const [plan, setPlan] = useState<CheckoutPlan | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);

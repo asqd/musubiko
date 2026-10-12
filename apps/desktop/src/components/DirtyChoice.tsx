@@ -1,10 +1,34 @@
 // "You have uncommitted changes: open in a separate folder, or stash and switch here?"
 // Shared by the hotfix and checkout dialogs so both ask the same way.
-import { RepoInfo } from "../api";
+import { useEffect, useState } from "react";
+import { api, RepoInfo } from "../api";
 import { plural } from "../format";
 import { home } from "../platform";
 
 export type WorkMode = "worktree" | "switch";
+
+/** The repository as it is now. The screen's info may be minutes old and the working copy may
+ * have changed since, so a dialog asks again when it opens; until then it shows `info`. */
+export function useFreshInfo(info: RepoInfo): RepoInfo {
+  const [fresh, setFresh] = useState(info);
+  useEffect(() => {
+    let live = true;
+    api
+      .repoInfo()
+      .then((i) => live && setFresh(i))
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [info.root]);
+  return fresh;
+}
+
+/** Worktree when there are uncommitted changes, else switch here — until the user picks. */
+export function useWorkMode(info: RepoInfo): [WorkMode, (m: WorkMode) => void] {
+  const [picked, setPicked] = useState<WorkMode | null>(null);
+  return [picked ?? (info.changes.length ? "worktree" : "switch"), setPicked];
+}
 
 interface Props {
   info: RepoInfo;

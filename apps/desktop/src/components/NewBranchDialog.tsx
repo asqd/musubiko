@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { After, api, Branch, errorText, NewBranchPlan, RepoInfo } from "../api";
 import { BranchIcon } from "./Icons";
 import { Dialog, OpDone, RunFooter, StepsView, useOpRunner } from "./OpRun";
-import DirtyChoice from "./DirtyChoice";
+import DirtyChoice, { useFreshInfo, useWorkMode } from "./DirtyChoice";
 import BasePicker from "./BasePicker";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -16,8 +16,6 @@ interface Props {
   /** Something in the repository changed: re-read it. */
   onChanged: () => void;
 }
-
-type Mode = "worktree" | "switch";
 
 /** The prefixes this repository's branches use most, e.g. feature/, bugfix/. */
 function usualPrefixes(branches: Branch[], hotfixPrefix: string): string[] {
@@ -33,14 +31,14 @@ function usualPrefixes(branches: Branch[], hotfixPrefix: string): string[] {
   return (found.length ? found : ["feature/", "bugfix/"]).slice(0, 4);
 }
 
-export default function NewBranchDialog({ info, base: initialBase, branches, onClose, onChanged }: Props) {
-  const dirty = info.changes.length;
+export default function NewBranchDialog({ info: screenInfo, base: initialBase, branches, onClose, onChanged }: Props) {
+  const info = useFreshInfo(screenInfo);
   const prefixes = useMemo(() => usualPrefixes(branches, info.flow.hotfixPrefix), [branches, info.flow.hotfixPrefix]);
   const [name, setName] = useState(prefixes[0] ?? "");
   const [base, setBase] = useState(initialBase);
   const [fresh, setFresh] = useState(true);
   const [push, setPush] = useState(false);
-  const [mode, setMode] = useState<Mode>(dirty ? "worktree" : "switch");
+  const [mode, setMode] = useWorkMode(info);
   const [stay, setStay] = useState(false);
   const [plan, setPlan] = useState<NewBranchPlan | null>(null);
   const runner = useOpRunner(onChanged);
