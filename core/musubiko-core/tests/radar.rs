@@ -310,3 +310,50 @@ fn a_squash_merged_port_counts_as_carried_over() {
     assert_eq!(p.state, PairState::Done);
     assert!(radar.lost.is_empty(), "{:?}", radar.lost);
 }
+
+#[test]
+fn a_port_with_a_resolved_conflict_counts_as_carried_over() {
+    let f = with_origin();
+    f.git(&["checkout", "-q", "develop"]);
+    f.commit("c.txt", "develop\n", "c on develop");
+    f.git(&["push", "-q", "origin", "develop"]);
+    f.git(&["fetch", "-q", "origin"]);
+    f.git(&["checkout", "-q", "-b", "hotfix/LT-6", "master"]);
+    f.commit("c.txt", "master\n", "c on hotfix");
+    let fix = head(&f);
+    f.git(&["checkout", "-q", "feature/work"]);
+
+    let repo = f.repo();
+    let input = PortInput {
+        commits: vec![fix.clone()],
+        target: "hotfix/LT-6-dev".into(),
+        create: true,
+        push: false,
+    };
+    let mut op = repo.start_port(&input).unwrap();
+    run(&mut op, &repo);
+    let dir = op
+        .stopped_pick()
+        .expect("stopped on the conflict")
+        .to_string();
+    // Resolved by hand: neither side as is, so the patch differs from the original.
+    std::fs::write(
+        std::path::Path::new(&dir).join("c.txt"),
+        "master and develop\n",
+    )
+    .unwrap();
+    op.resume(&repo, false);
+    run(&mut op, &repo);
+    assert_eq!(op.status, OpStatus::Done, "{:?}", op.states);
+
+    let radar = repo.hotfix_radar().unwrap();
+    let pair = radar.pairs.iter().find(|p| p.slug == "LT-6").unwrap();
+    assert_eq!(pair.unsynced, 0, "{pair:#?}");
+    let ported = pair.commits[0].ported.as_ref().expect("carried over");
+    assert_eq!(ported.place, "hotfix/LT-6-dev");
+    assert_eq!(
+        ported.hash,
+        f.git(&["rev-parse", "hotfix/LT-6-dev"]).trim(),
+        "points at the copy"
+    );
+}
