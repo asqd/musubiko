@@ -2,6 +2,7 @@ import { memo, useMemo, useState } from "react";
 import { api, errorText, FileDiff } from "../api";
 import { blocks, BIG_FILE_LINES, Gap, gapAfter, gapBefore, isGenerated, isMigration, lineCount, Row } from "./model";
 import { highlight, highlightMarked, languageOf } from "./highlight";
+import { plural } from "../format";
 
 export type Mode = "unified" | "split";
 
@@ -112,11 +113,16 @@ function FileView({ file, index, rev, mode, viewed, collapsed, active, onViewed,
                 ? "Содержимое не изменилось."
                 : file.modeChange
                   ? "Изменились только права файла."
-                  : "Изменения только в пробелах."}
+                  : file.change === "added"
+                    ? "Новый пустой файл."
+                    : file.change === "deleted"
+                      ? "Удалён пустой файл."
+                      : "Изменения только в пробелах."}
             </div>
           ) : !showBody ? (
             <div className="note">
-              {isGenerated(file.path) ? "Сгенерированный файл" : "Большой дифф"}: {lineCount(file)} строк.{" "}
+              {isGenerated(file.path) ? "Сгенерированный файл" : "Большой дифф"}: {lineCount(file)}{" "}
+              {plural(lineCount(file), "строка", "строки", "строк")}.{" "}
               <button className="btn sm" onClick={() => setForceOpen(true)}>
                 Показать
               </button>
@@ -165,7 +171,7 @@ function Table({ file, lang, mode, source, opened, onExpand }: TableProps) {
       <tr key={key} className="gap">
         <td colSpan={cols}>
           <button onClick={() => onExpand(key)}>
-            {count === null ? "⋯ Показать до конца файла" : `⋯ Показать ${count} ${count === 1 ? "строку" : count < 5 ? "строки" : "строк"} (${gap.from}–${gap.to})`}
+            {count === null ? "⋯ Показать до конца файла" : `⋯ Показать ${count} ${plural(count, "строку", "строки", "строк")} (${gap.from}–${gap.to})`}
           </button>
         </td>
       </tr>,
@@ -216,8 +222,12 @@ function Table({ file, lang, mode, source, opened, onExpand }: TableProps) {
 
 const sign = { context: " ", add: "+", del: "−" } as const;
 
+/** After a line the file ends on without a newline: otherwise "-x" and "+x" look the same. */
+const NO_EOL = '<span class="noeol" title="Нет перевода строки в конце файла">нет ⏎</span>';
+const withEol = (html: string, row: Row) => (row.noEol ? html + NO_EOL : html);
+
 function UniRow({ row, lang }: { row: Row; lang: string | null }) {
-  const html = highlightMarked(row.text, lang, row.mark, row.kind === "add" ? "wa" : "wd");
+  const html = withEol(highlightMarked(row.text, lang, row.mark, row.kind === "add" ? "wa" : "wd"), row);
   return (
     <tr className={row.kind === "context" ? "" : row.kind}>
       <td className="no">{row.old ?? ""}</td>
@@ -229,7 +239,7 @@ function UniRow({ row, lang }: { row: Row; lang: string | null }) {
 }
 
 function SplitCtx({ row, lang }: { row: Row; lang: string | null }) {
-  const html = highlight(row.text, lang);
+  const html = withEol(highlight(row.text, lang), row);
   return (
     <tr>
       <td className="no">{row.old}</td>
@@ -246,7 +256,7 @@ function SplitChg({ del, add, lang }: { del?: Row; add?: Row; lang: string | nul
       {del ? (
         <>
           <td className="no del">{del.old}</td>
-          <td className="cd del" dangerouslySetInnerHTML={{ __html: highlightMarked(del.text, lang, del.mark, "wd") }} />
+          <td className="cd del" dangerouslySetInnerHTML={{ __html: withEol(highlightMarked(del.text, lang, del.mark, "wd"), del) }} />
         </>
       ) : (
         <>
@@ -257,7 +267,7 @@ function SplitChg({ del, add, lang }: { del?: Row; add?: Row; lang: string | nul
       {add ? (
         <>
           <td className="no add sep">{add.new}</td>
-          <td className="cd add" dangerouslySetInnerHTML={{ __html: highlightMarked(add.text, lang, add.mark, "wa") }} />
+          <td className="cd add" dangerouslySetInnerHTML={{ __html: withEol(highlightMarked(add.text, lang, add.mark, "wa"), add) }} />
         </>
       ) : (
         <>

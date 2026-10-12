@@ -25,7 +25,8 @@ function matches(b: Branch, f: Filter, now: number): boolean {
     case "stale":
       return isStale(b, now);
     case "unpushed":
-      return b.location === "local" || (b.sync?.ahead ?? 0) > 0;
+      // A merged or new local branch has nothing of its own to push.
+      return (b.location === "local" && !isMerged(b.status) && b.status.kind !== "new") || (b.sync?.ahead ?? 0) > 0;
     default:
       return true;
   }

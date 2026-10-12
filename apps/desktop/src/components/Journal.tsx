@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, commandOf, errorText, Operation, OpStatus } from "../api";
+import { api, commandOf, errorText, Operation, OpStatus, withoutHints } from "../api";
 import { fullDate } from "../format";
 import { ErrorBanner } from "./ErrorBanner";
 
@@ -110,7 +110,7 @@ export default function Journal({ tick, onChanged }: { tick: number; onChanged: 
                       <span className="p">{st.kind === "done" ? "✓" : st.kind === "failed" ? "✗" : "·"} $ </span>
                       {commandOf(s)}
                       {"\n"}
-                      {st.kind === "failed" && <span className="err">  {st.error}{"\n"}</span>}
+                      {st.kind === "failed" && <span className="err">  {withoutHints(st.error)}{"\n"}</span>}
                     </span>
                   );
                 })}

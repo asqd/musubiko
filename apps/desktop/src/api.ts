@@ -87,6 +87,8 @@ export type LineKind = "context" | "add" | "del";
 export interface Line {
   kind: LineKind;
   text: string;
+  /** The file ends here without a newline. */
+  noEol?: boolean;
 }
 
 export interface Hunk {
@@ -370,6 +372,15 @@ export interface CheckoutInput {
 export interface CheckoutPlan extends OpPlan {
   worktreePath: string;
   savedStash: string | null;
+}
+
+/** A step's error without git's "hint:" lines: they tell what to type in a terminal, while the
+ * app offers buttons for the same. */
+export function withoutHints(error: string): string {
+  return error
+    .split("\n")
+    .filter((l) => !l.startsWith("hint:"))
+    .join("\n");
 }
 
 /** The command line a step runs, as shown to the user. */

@@ -8,6 +8,8 @@ export interface Row {
   new?: number;
   /** Changed part of the line, [start, end), when it has a counterpart on the other side. */
   mark?: [number, number];
+  /** The file ends here without a newline. */
+  noEol?: boolean;
 }
 
 export type Block = { type: "ctx"; row: Row } | { type: "chg"; dels: Row[]; adds: Row[] };
@@ -21,14 +23,20 @@ export function blocks(h: Hunk): Block[] {
   while (i < h.lines.length) {
     const l = h.lines[i];
     if (l.kind === "context") {
-      out.push({ type: "ctx", row: { kind: "context", text: l.text, old: o++, new: n++ } });
+      out.push({ type: "ctx", row: { kind: "context", text: l.text, old: o++, new: n++, noEol: l.noEol } });
       i++;
       continue;
     }
     const dels: Row[] = [];
     const adds: Row[] = [];
-    while (i < h.lines.length && h.lines[i].kind === "del") dels.push({ kind: "del", text: h.lines[i++].text, old: o++ });
-    while (i < h.lines.length && h.lines[i].kind === "add") adds.push({ kind: "add", text: h.lines[i++].text, new: n++ });
+    while (i < h.lines.length && h.lines[i].kind === "del") {
+      const l = h.lines[i++];
+      dels.push({ kind: "del", text: l.text, old: o++, noEol: l.noEol });
+    }
+    while (i < h.lines.length && h.lines[i].kind === "add") {
+      const l = h.lines[i++];
+      adds.push({ kind: "add", text: l.text, new: n++, noEol: l.noEol });
+    }
     if (dels.length === adds.length) {
       dels.forEach((d, k) => {
         const m = intraline(d.text, adds[k].text);

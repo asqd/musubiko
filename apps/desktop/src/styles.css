@@ -199,6 +199,7 @@ tr.pair .bname .nohd { width: 12px; height: 10px; border-left: 1.5px solid var(-
 .ab .b { color: var(--faint); margin-left: 8px; }
 .commit { display: flex; gap: 8px; align-items: baseline; max-width: 420px; }
 .commit .msg { overflow: hidden; text-overflow: ellipsis; color: var(--muted); }
+.noeol { color: var(--bad); margin-left: 4px; font-size: 11px; opacity: .8; user-select: none; }
 /* The commit column takes what is left and gives way first, so the table fits the window. */
 .br th.fill, .br td.fill { width: 100%; }
 .br th.fill { max-width: 0; overflow: hidden; text-overflow: ellipsis; }
