@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Musubiko: ветки, статусы и хотфиксы</title>
+<meta name="description" content="Git-клиент, который показывает, какие ветки уже слиты (в том числе через squash) и где будет конфликт. Для схемы с master и develop ещё и следит за хотфиксами.">
+<meta property="og:title" content="Musubiko">
+<meta property="og:description" content="Ветки, их статусы и hotfix flow в одном окне.">
+<meta property="og:image" content="shots/branches.webp">
+<link rel="icon" href="favicon.png">
+<link rel="alternate" hreflang="ru" href="https://asqd.github.io/musubiko/">
+<link rel="alternate" hreflang="en" href="https://asqd.github.io/musubiko/en/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <a class="brand" href="index.html"><img src="icon.png" alt="">Musubiko</a>
+  <nav>
+    <a class="hide-s" href="#statuses">Возможности</a>
+    <a class="hide-xs" href="#install">Установка</a>
+    <a href="https://github.com/asqd/musubiko" target="_blank" rel="noopener" class="ext">GitHub</a>
+    <span class="lang"><a href="en/index.html" hreflang="en" lang="en" title="English">EN</a><span aria-current="page">RU</span></span>
+  </nav>
+</header>
+
+<div class="hero">
+  <h1>Ветки, их статусы и <em>hotfix flow</em> в&nbsp;одном окне</h1>
+  <p class="lead">Git-клиент, который показывает, какие ветки уже слиты, даже если их вливали через
+    squash, и где при слиянии будет конфликт. Подойдёт любой репозиторий, хоть с одной веткой main.
+    А если у вас master и develop, Musubiko ещё проследит, чтобы хотфикс попал в обе.</p>
+  <div class="actions">
+    <a class="button" href="https://github.com/asqd/musubiko/releases" target="_blank" rel="noopener">Скачать</a>
+    <a class="button ghost" href="https://github.com/asqd/musubiko" target="_blank" rel="noopener">Исходники</a>
+    <span class="meta">macOS · Windows · Linux · нужен git 2.38+</span>
+  </div>
+</div>
+
+<figure>
+  <a class="shot" href="shots/branches.webp" target="_blank" rel="noopener">
+    <picture>
+      <source srcset="shots/branches-dark.webp" media="(prefers-color-scheme: dark)">
+      <img src="shots/branches.webp" width="2560" height="1600" alt="Список веток: у каждой статус слияния с develop, сколько коммитов впереди и позади, автор и последний коммит">
+    </picture>
+  </a>
+</figure>
+
+<section id="statuses" class="first">
+  <div class="label">статусы</div>
+  <div class="body">
+    <h2>Какие ветки уже слиты</h2>
+    <p>Каждую ветку Musubiko сравнивает с базой: с develop, master (или main) или любой другой
+      веткой, которую вы выберете. Master, main и develop берутся с сервера, так что «слита» означает,
+      что изменения уже на сервере, а не только у вас локально.</p>
+    <ul class="statuses">
+      <li><span class="badge b-ok">слита</span><span>все коммиты ветки уже есть в базе</span></li>
+      <li><span class="badge b-sq">слита · squash</span><span>коммиты другие, но изменения уже в базе; <code>git branch --merged</code> такие ветки не находит</span></li>
+      <li><span class="badge b-bad">конфликт</span><span>при слиянии будет конфликт, и видно, в каких файлах</span></li>
+      <li><span class="badge b-open">не слита</span><span>в ветке есть изменения, которых нет в базе</span></li>
+    </ul>
+    <p style="margin-top:24px">Слияние проверяется через <code>git merge-tree --write-tree</code>,
+      рабочую копию и индекс оно не трогает. Результат кэшируется, пока не сдвинется ветка или база,
+      поэтому в репозитории на 840 веток список при повторном открытии строится за 0,1&nbsp;с.</p>
+  </div>
+</section>
+
+<section>
+  <div class="label">дифф</div>
+  <div class="body">
+    <h2>Дифф ветки и конфликты до слияния</h2>
+    <p>Дифф считается от места, где ветка отошла от базы, как в pull request на GitHub. Есть дерево
+      файлов, режимы unified и split, подсветка изменённой части строки и отметка «Просмотрено».</p>
+    <p>Если ветка конфликтует с базой, можно открыть сами места конфликта и сравнить, что в базе и
+      что в ветке.</p>
+  </div>
+  <div class="wide pair">
+    <figure>
+      <a class="shot" href="shots/diff.webp" target="_blank" rel="noopener">
+        <picture>
+          <source srcset="shots/diff-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="shots/diff.webp" width="2560" height="1600" alt="Дифф ветки: дерево файлов слева, изменения по файлам справа" loading="lazy">
+        </picture>
+      </a>
+      <figcaption>Изменения ветки относительно develop</figcaption>
+    </figure>
+    <figure>
+      <a class="shot" href="shots/conflict.webp" target="_blank" rel="noopener">
+        <picture>
+          <source srcset="shots/conflict-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="shots/conflict.webp" width="2560" height="1600" alt="Места конфликта: версия develop и версия ветки" loading="lazy">
+        </picture>
+      </a>
+      <figcaption>Конфликты той же ветки</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="label">хотфиксы</div>
+  <div class="body">
+    <h2>Хотфикс сразу в master и develop</h2>
+    <p>Вы пишете название задачи, например «Project-4900 ошибка в документах», и Musubiko создаёт две
+      ветки: <code>hotfix/PROJECT-4900-oshibka-v-dokumentah</code> от свежего master и
+      <code>…-dev</code> от свежего develop. Перед этим он проверяет, что такие имена не заняты на
+      сервере, а потом пушит обе. Команды можно посмотреть до запуска. Если develop в репозитории
+      нет, хотфикс будет одной веткой от master.</p>
+    <p>В разделе «Хотфиксы» видно, какие исправления из master уже попали в develop. Коммит
+      засчитывается, даже если его перенесли через cherry-pick или squash. Если чего-то не хватает,
+      это можно перенести прямо оттуда.</p>
+  </div>
+  <figure class="wide">
+    <a class="shot" href="shots/radar.webp" target="_blank" rel="noopener">
+      <picture>
+        <source srcset="shots/radar-dark.webp" media="(prefers-color-scheme: dark)">
+        <img src="shots/radar.webp" width="2560" height="1600" alt="Радар хотфиксов: два коммита есть в master, но не в develop; пары веток и их перенос" loading="lazy">
+      </picture>
+    </a>
+  </figure>
+</section>
+
+<section>
+  <div class="label">поиск</div>
+  <div class="body">
+    <h2>Где коммит?</h2>
+    <p>Искать можно по хэшу, номеру задачи или тексту сообщения. Для каждого найденного коммита
+      видно, есть ли он в master и develop, с какого тега он в master, в каких ветках лежит и куда
+      его переносили.</p>
+  </div>
+  <figure class="wide">
+    <a class="shot" href="shots/where.webp" target="_blank" rel="noopener">
+      <picture>
+        <source srcset="shots/where-dark.webp" media="(prefers-color-scheme: dark)">
+        <img src="shots/where.webp" width="2560" height="1600" alt="Поиск по номеру задачи: коммит есть в master и, как cherry-pick, в develop" loading="lazy">
+      </picture>
+    </a>
+  </figure>
+</section>
+
+<section>
+  <div class="label">отмена</div>
+  <div class="body">
+    <h2>Любое действие можно отменить</h2>
+    <p>Musubiko записывает каждое своё действие в журнал вместе с тем, как его отменить. Перед
+      отменой он проверяет, что с тех пор ничего не изменилось. Например, ветку, в которую успели
+      закоммитить, отмена не удалит, а ветку на сервере удаляет только через
+      <code>push --force-with-lease</code>.</p>
+    <p>Если удалить неслитую ветку, её коммиты не пропадут: на них остаётся ссылка
+      <code>refs/musubiko/deleted/…</code>, пока удаление можно отменить.</p>
+  </div>
+</section>
+
+<section>
+  <div class="label">ещё</div>
+  <div class="body">
+    <ul class="list">
+      <li><b>Мои ветки.</b> Только ваши ветки. Сверху те, с которыми что-то не так: конфликт, база сильно ушла вперёд, есть незапушенные коммиты или неделю нет новых коммитов.</li>
+      <li><b>Уборка веток.</b> Отметьте слитые или удалённые на сервере ветки, и Musubiko удалит их и локально, и на сервере одним push.</li>
+      <li><b>Checkout без stash.</b> Если есть незакоммиченные изменения, ветку можно открыть в соседней папке через worktree.</li>
+      <li><b>Палитра <kbd>⌘K</kbd>.</b> Почти всё делается с клавиатуры: «checkout 4888», «дифф sitemap», хэш или номер задачи.</li>
+      <li><b>Обычный git.</b> Все операции выполняются через git CLI, поэтому работают ваши настройки, хуки и доступы. Пока Musubiko только читает репозиторий, он не блокирует индекс и не мешает git в терминале.</li>
+      <li><b>Отчёт об ошибке.</b> Кнопка копирует версии, текст ошибки и лог, и это можно сразу отправить в чат. Домашняя папка и токены в отчёте скрыты.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="install">
+  <div class="label">установка</div>
+  <div class="body">
+    <h2>Установка</h2>
+    <p>Установщики — на <a class="strong" href="https://github.com/asqd/musubiko/releases" target="_blank" rel="noopener">странице релизов</a>.
+      Везде нужен git 2.38 или новее. Если хотите использовать конкретный git, укажите путь к нему
+      в <code>MUSUBIKO_GIT</code>.</p>
+    <table>
+      <tr><th>macOS</th><td><code>Musubiko_&lt;версия&gt;_universal.dmg</code><br>
+        Приложение подписано ad-hoc, без Apple Developer ID. В macOS 15 откройте его, закройте предупреждение и нажмите «Всё равно открыть» в «Системные настройки → Конфиденциальность и безопасность». В macOS 12–14 достаточно правого клика и «Открыть».</td></tr>
+      <tr><th>Windows</th><td><code>Musubiko_&lt;версия&gt;_x64-setup.exe</code><br>
+        SmartScreen предупредит о неизвестном издателе: нажмите «Подробнее», затем «Выполнить в любом случае». Права администратора не нужны.</td></tr>
+      <tr><th>Linux</th><td><code>.AppImage</code> или <code>.deb</code><br>
+        Нужен WebKitGTK 4.1 (Ubuntu 22.04+, Debian 12+).</td></tr>
+    </table>
+    <h3 style="font-size:18px;margin:40px 0 12px">Из исходников</h3>
+    <p>Понадобятся Rust 1.88+, Node.js 20+, а на macOS ещё Xcode Command Line Tools.</p>
+<pre>git clone https://github.com/asqd/musubiko
+cd musubiko
+make run      <span class="c"># собрать Musubiko.app и запустить</span>
+make test     <span class="c"># тесты ядра на временных репозиториях</span></pre>
+    <p>То же самое можно посмотреть в терминале через утилиту <code>musubiko</code>:</p>
+<pre>cargo run -p musubiko-cli -- branches ~/work/project
+cargo run -p musubiko-cli -- where PROJECT-4888 ~/work/project</pre>
+  </div>
+</section>
+
+<footer>
+  <span>Musubiko 0.1</span>
+  <span>Rust + Tauri</span>
+  <a href="https://github.com/asqd/musubiko" target="_blank" rel="noopener" class="ext">GitHub</a>
+  <a href="https://github.com/asqd/musubiko/blob/master/docs/PLAN.md" target="_blank" rel="noopener">План</a>
+</footer>
+
+</div>
+</body>
+</html>

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Musubiko: branches, merge status and hotfixes</title>
+<meta name="description" content="A git client that shows which branches are merged (squash merges too) and which will conflict. With master and develop, it also keeps track of hotfixes.">
+<meta property="og:title" content="Musubiko">
+<meta property="og:description" content="Branches, their status and hotfix flow in one window.">
+<meta property="og:image" content="../shots/branches.webp">
+<link rel="icon" href="../favicon.png">
+<link rel="alternate" hreflang="ru" href="https://asqd.github.io/musubiko/">
+<link rel="alternate" hreflang="en" href="https://asqd.github.io/musubiko/en/">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../style.css">
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <a class="brand" href="index.html"><img src="../icon.png" alt="">Musubiko</a>
+  <nav>
+    <a class="hide-s" href="#statuses">Features</a>
+    <a class="hide-xs" href="#install">Install</a>
+    <a href="https://github.com/asqd/musubiko" target="_blank" rel="noopener" class="ext">GitHub</a>
+    <span class="lang"><span aria-current="page">EN</span><a href="../index.html" hreflang="ru" lang="ru" title="Русский">RU</a></span>
+  </nav>
+</header>
+
+<div class="hero">
+  <h1>Branches, their status and <em>hotfix flow</em> in&nbsp;one window</h1>
+  <p class="lead">A git client that shows which branches are already merged, even if they were
+    squashed, and which ones will conflict. Any repository will do, even one with just main. If you
+    use master and develop, Musubiko also makes sure every hotfix lands in both.</p>
+  <div class="actions">
+    <a class="button" href="https://github.com/asqd/musubiko/releases" target="_blank" rel="noopener">Download</a>
+    <a class="button ghost" href="https://github.com/asqd/musubiko" target="_blank" rel="noopener">Source</a>
+    <span class="meta">macOS · Windows · Linux · git 2.38+ · interface in Russian for now</span>
+  </div>
+</div>
+
+<figure>
+  <a class="shot" href="../shots/branches.webp" target="_blank" rel="noopener">
+    <picture>
+      <source srcset="../shots/branches-dark.webp" media="(prefers-color-scheme: dark)">
+      <img src="../shots/branches.webp" width="2560" height="1600" alt="Branch list: each branch with its merge status against develop, commits ahead and behind, author and last commit">
+    </picture>
+  </a>
+</figure>
+
+<section id="statuses" class="first">
+  <div class="label">status</div>
+  <div class="body">
+    <h2>Which branches are already merged</h2>
+    <p>Musubiko compares every branch with a base: develop, master (or main) or any other branch you
+      choose. Master, main and develop are taken from the server, so “merged” means the changes are
+      already on the server, not just in your local copy.</p>
+    <ul class="statuses">
+      <li><span class="badge b-ok">merged</span><span>all of the branch’s commits are in the base</span></li>
+      <li><span class="badge b-sq">merged · squash</span><span>the commits are different, but the changes are already in the base; <code>git branch --merged</code> doesn’t catch these</span></li>
+      <li><span class="badge b-bad">conflict</span><span>merging will conflict, and you can see which files</span></li>
+      <li><span class="badge b-open">not merged</span><span>the branch has changes the base doesn’t</span></li>
+    </ul>
+    <p style="margin-top:24px">The merge is checked with <code>git merge-tree --write-tree</code>,
+      which doesn’t touch your working copy or index. The result is cached until the branch or the
+      base moves, so in a repository with 840 branches the list reopens in 0.1&nbsp;s.</p>
+  </div>
+</section>
+
+<section>
+  <div class="label">diff</div>
+  <div class="body">
+    <h2>Branch diffs and conflicts before you merge</h2>
+    <p>The diff starts where the branch left its base, just like a pull request on GitHub. You get a
+      file tree, unified and split views, highlighting of the changed part of each line, and a
+      “Viewed” checkbox.</p>
+    <p>If a branch conflicts with its base, you can open the conflicts themselves and compare what
+      the base has with what the branch has.</p>
+  </div>
+  <div class="wide pair">
+    <figure>
+      <a class="shot" href="../shots/diff.webp" target="_blank" rel="noopener">
+        <picture>
+          <source srcset="../shots/diff-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="../shots/diff.webp" width="2560" height="1600" alt="Branch diff: file tree on the left, changes by file on the right" loading="lazy">
+        </picture>
+      </a>
+      <figcaption>Changes in the branch compared with develop</figcaption>
+    </figure>
+    <figure>
+      <a class="shot" href="../shots/conflict.webp" target="_blank" rel="noopener">
+        <picture>
+          <source srcset="../shots/conflict-dark.webp" media="(prefers-color-scheme: dark)">
+          <img src="../shots/conflict.webp" width="2560" height="1600" alt="Conflicts: the develop version and the branch version side by side" loading="lazy">
+        </picture>
+      </a>
+      <figcaption>Conflicts in the same branch</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section>
+  <div class="label">hotfixes</div>
+  <div class="body">
+    <h2>One hotfix, into master and develop</h2>
+    <p>Type the task name, say “Project-4900 broken invoice totals”, and Musubiko creates two
+      branches: <code>hotfix/PROJECT-4900-broken-invoice-totals</code> from a fresh master and
+      <code>…-dev</code> from a fresh develop. It first checks that neither name is taken on the
+      server, then pushes both. You can look at the commands before they run. If the repository
+      has no develop, the hotfix is a single branch from master.</p>
+    <p>The Hotfixes page shows which fixes from master have already reached develop. A commit counts
+      even if it was cherry-picked or squashed. If something is missing, you can carry it over from
+      the same page.</p>
+  </div>
+  <figure class="wide">
+    <a class="shot" href="../shots/radar.webp" target="_blank" rel="noopener">
+      <picture>
+        <source srcset="../shots/radar-dark.webp" media="(prefers-color-scheme: dark)">
+        <img src="../shots/radar.webp" width="2560" height="1600" alt="Hotfix radar: two commits are on master but not on develop; hotfix pairs and what has been carried over" loading="lazy">
+      </picture>
+    </a>
+  </figure>
+</section>
+
+<section>
+  <div class="label">search</div>
+  <div class="body">
+    <h2>Where is that commit?</h2>
+    <p>Search by hash, task number or commit message. For every commit found you can see whether it
+      is on master and develop, which tag first shipped it on master, which branches contain it and
+      where it was cherry-picked to.</p>
+  </div>
+  <figure class="wide">
+    <a class="shot" href="../shots/where.webp" target="_blank" rel="noopener">
+      <picture>
+        <source srcset="../shots/where-dark.webp" media="(prefers-color-scheme: dark)">
+        <img src="../shots/where.webp" width="2560" height="1600" alt="Search by task number: the commit is on master and, as a cherry-pick, on develop" loading="lazy">
+      </picture>
+    </a>
+  </figure>
+</section>
+
+<section>
+  <div class="label">undo</div>
+  <div class="body">
+    <h2>You can undo anything it does</h2>
+    <p>Musubiko writes every action to a journal along with how to undo it. Before undoing, it checks
+      that nothing has changed since. For example, it won’t delete a branch that someone has committed
+      to in the meantime, and it removes a branch from the server only with
+      <code>push --force-with-lease</code>.</p>
+    <p>If you delete a branch that isn’t merged, its commits stay around: a
+      <code>refs/musubiko/deleted/…</code> ref keeps them for as long as the deletion can be undone.</p>
+  </div>
+</section>
+
+<section>
+  <div class="label">also</div>
+  <div class="body">
+    <ul class="list">
+      <li><b>My branches.</b> Only your branches. The ones with problems come first: a conflict, a base that has moved far ahead, unpushed commits, or no new commits for a week.</li>
+      <li><b>Branch cleanup.</b> Select the branches that are merged or already gone from the server, and Musubiko deletes them both locally and on the server in a single push.</li>
+      <li><b>Checkout without stash.</b> If you have uncommitted changes, you can open the branch in a separate folder with a worktree.</li>
+      <li><b>Command palette <kbd>⌘K</kbd>.</b> Almost everything works from the keyboard: “checkout 4888”, “diff sitemap”, a hash or a task number.</li>
+      <li><b>Plain git.</b> Everything runs through the git CLI, so your config, hooks and credentials just work. While Musubiko is only reading, it doesn’t lock the index or get in the way of git in your terminal.</li>
+      <li><b>Error reports.</b> A button copies the versions, the error and the log, ready to paste into a chat. Your home folder and any tokens are masked.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="install">
+  <div class="label">install</div>
+  <div class="body">
+    <h2>Install</h2>
+    <p>Installers are on the <a class="strong" href="https://github.com/asqd/musubiko/releases" target="_blank" rel="noopener">releases page</a>.
+      Every platform needs git 2.38 or newer. To use a specific git, set <code>MUSUBIKO_GIT</code>
+      to its path. The interface is in Russian for now.</p>
+    <table>
+      <tr><th>macOS</th><td><code>Musubiko_&lt;version&gt;_universal.dmg</code><br>
+        The app is signed ad hoc, without an Apple Developer ID. On macOS 15, open it, close the warning, then click Open Anyway in System Settings → Privacy &amp; Security. On macOS 12–14, right-click it and choose Open.</td></tr>
+      <tr><th>Windows</th><td><code>Musubiko_&lt;version&gt;_x64-setup.exe</code><br>
+        SmartScreen will warn about an unknown publisher: click More info, then Run anyway. It installs for the current user, so you don’t need admin rights.</td></tr>
+      <tr><th>Linux</th><td><code>.AppImage</code> or <code>.deb</code><br>
+        Needs WebKitGTK 4.1 (Ubuntu 22.04+, Debian 12+).</td></tr>
+    </table>
+    <h3 style="font-size:18px;margin:40px 0 12px">From source</h3>
+    <p>You’ll need Rust 1.88+, Node.js 20+ and, on macOS, the Xcode Command Line Tools.</p>
+<pre>git clone https://github.com/asqd/musubiko
+cd musubiko
+make run      <span class="c"># build Musubiko.app and launch it</span>
+make test     <span class="c"># core tests on throwaway repositories</span></pre>
+    <p>You can get the same information in a terminal with the <code>musubiko</code> CLI:</p>
+<pre>cargo run -p musubiko-cli -- branches ~/work/project
+cargo run -p musubiko-cli -- where PROJECT-4888 ~/work/project</pre>
+  </div>
+</section>
+
+<footer>
+  <span>Musubiko 0.1</span>
+  <span>Rust + Tauri</span>
+  <a href="https://github.com/asqd/musubiko" target="_blank" rel="noopener" class="ext">GitHub</a>
+  <a href="https://github.com/asqd/musubiko/blob/master/docs/PLAN.md" target="_blank" rel="noopener">Roadmap (in Russian)</a>
+</footer>
+
+</div>
+</body>
+</html>
