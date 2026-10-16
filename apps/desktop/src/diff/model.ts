@@ -3,6 +3,8 @@ import type { FileDiff, Hunk } from "../api";
 
 export interface Row {
   kind: "context" | "add" | "del";
+  /** `hunk:line` for rows from the diff, so search matches find their row; none for expanded context. */
+  id?: string;
   text: string;
   old?: number;
   new?: number;
@@ -15,7 +17,7 @@ export interface Row {
 export type Block = { type: "ctx"; row: Row } | { type: "chg"; dels: Row[]; adds: Row[] };
 
 /** Numbers the hunk's lines and groups each run of deletions with the additions after it. */
-export function blocks(h: Hunk): Block[] {
+export function blocks(h: Hunk, hi = 0): Block[] {
   let o = h.oldStart;
   let n = h.newStart;
   const out: Block[] = [];
@@ -23,19 +25,21 @@ export function blocks(h: Hunk): Block[] {
   while (i < h.lines.length) {
     const l = h.lines[i];
     if (l.kind === "context") {
-      out.push({ type: "ctx", row: { kind: "context", text: l.text, old: o++, new: n++, noEol: l.noEol } });
+      out.push({ type: "ctx", row: { kind: "context", id: `${hi}:${i}`, text: l.text, old: o++, new: n++, noEol: l.noEol } });
       i++;
       continue;
     }
     const dels: Row[] = [];
     const adds: Row[] = [];
     while (i < h.lines.length && h.lines[i].kind === "del") {
+      const id = `${hi}:${i}`;
       const l = h.lines[i++];
-      dels.push({ kind: "del", text: l.text, old: o++, noEol: l.noEol });
+      dels.push({ kind: "del", id, text: l.text, old: o++, noEol: l.noEol });
     }
     while (i < h.lines.length && h.lines[i].kind === "add") {
+      const id = `${hi}:${i}`;
       const l = h.lines[i++];
-      adds.push({ kind: "add", text: l.text, new: n++, noEol: l.noEol });
+      adds.push({ kind: "add", id, text: l.text, new: n++, noEol: l.noEol });
     }
     if (dels.length === adds.length) {
       dels.forEach((d, k) => {

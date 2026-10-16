@@ -1,7 +1,8 @@
-import { memo, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { api, errorText, FileDiff } from "../api";
 import { blocks, BIG_FILE_LINES, Gap, gapAfter, gapBefore, isGenerated, isMigration, lineCount, Row } from "./model";
-import { highlight, highlightMarked, languageOf } from "./highlight";
+import { highlight, highlightHits, Hit, languageOf } from "./highlight";
+import type { LineMatches } from "./search";
 import { plural } from "../format";
 
 export type Mode = "unified" | "split";
@@ -17,6 +18,10 @@ interface Props {
   active: boolean;
   onViewed: (index: number) => void;
   onCollapse: (index: number) => void;
+  /** Search matches in this file, by row id. */
+  matches?: LineMatches;
+  /** Global index of the match the search is on, or -1 when it is in another file. */
+  current?: number;
 }
 
 const CHANGE_TAG: Partial<Record<FileDiff["change"], string>> = {
@@ -51,7 +56,7 @@ function Blocks({ a, d }: { a: number; d: number }) {
   );
 }
 
-function FileView({ file, index, rev, mode, viewed, collapsed, active, onViewed, onCollapse }: Props) {
+function FileView({ file, index, rev, mode, viewed, collapsed, active, onViewed, onCollapse, matches, current = -1 }: Props) {
   const lang = useMemo(() => languageOf(file.path), [file.path]);
   const big = lineCount(file) > BIG_FILE_LINES || isGenerated(file.path);
   const [forceOpen, setForceOpen] = useState(false);
@@ -61,6 +66,10 @@ function FileView({ file, index, rev, mode, viewed, collapsed, active, onViewed,
 
   const hidden = collapsed;
   const showBody = !hidden && (!big || forceOpen);
+  // The search moved to a match in this big file: show it, and keep it shown.
+  useEffect(() => {
+    if (current >= 0 && big) setForceOpen(true);
+  }, [current, big]);
 
   const expand = async (key: string) => {
     try {
@@ -128,7 +137,7 @@ function FileView({ file, index, rev, mode, viewed, collapsed, active, onViewed,
               </button>
             </div>
           ) : (
-            <Table file={file} lang={lang} mode={mode} source={source} opened={opened} onExpand={expand} />
+            <Table file={file} lang={lang} mode={mode} source={source} opened={opened} onExpand={expand} matches={matches} current={current} />
           )}
           {file.truncated && <div className="note">Файл слишком большой: показаны первые 5000 строк диффа.</div>}
           {loadError && <div className="note bad">{loadError}</div>}
@@ -147,10 +156,14 @@ interface TableProps {
   source: string[] | null;
   opened: Set<string>;
   onExpand: (key: string) => void;
+  matches?: LineMatches;
+  current: number;
 }
 
-function Table({ file, lang, mode, source, opened, onExpand }: TableProps) {
+function Table({ file, lang, mode, source, opened, onExpand, matches, current }: TableProps) {
   const split = mode === "split";
+  const hitsOf = (row?: Row): Hit[] =>
+    (row?.id && matches?.get(row.id)?.map((m) => ({ start: m.start, end: m.end, current: m.index === current }))) || [];
   const rows: JSX.Element[] = [];
   const cols = 4;
 
@@ -188,19 +201,21 @@ function Table({ file, lang, mode, source, opened, onExpand }: TableProps) {
         </td>
       </tr>,
     );
-    blocks(h).forEach((b, bi) => {
+    blocks(h, hi).forEach((b, bi) => {
       const k = `${hi}-${bi}`;
       if (b.type === "ctx") {
-        rows.push(split ? <SplitCtx key={k} row={b.row} lang={lang} /> : <UniRow key={k} row={b.row} lang={lang} />);
+        const hits = hitsOf(b.row);
+        rows.push(split ? <SplitCtx key={k} row={b.row} lang={lang} hits={hits} /> : <UniRow key={k} row={b.row} lang={lang} hits={hits} />);
         return;
       }
       if (!split) {
-        b.dels.forEach((r, j) => rows.push(<UniRow key={`${k}d${j}`} row={r} lang={lang} />));
-        b.adds.forEach((r, j) => rows.push(<UniRow key={`${k}a${j}`} row={r} lang={lang} />));
+        b.dels.forEach((r, j) => rows.push(<UniRow key={`${k}d${j}`} row={r} lang={lang} hits={hitsOf(r)} />));
+        b.adds.forEach((r, j) => rows.push(<UniRow key={`${k}a${j}`} row={r} lang={lang} hits={hitsOf(r)} />));
         return;
       }
       const n = Math.max(b.dels.length, b.adds.length);
-      for (let j = 0; j < n; j++) rows.push(<SplitChg key={`${k}s${j}`} del={b.dels[j]} add={b.adds[j]} lang={lang} />);
+      for (let j = 0; j < n; j++)
+        rows.push(<SplitChg key={`${k}s${j}`} del={b.dels[j]} add={b.adds[j]} lang={lang} delHits={hitsOf(b.dels[j])} addHits={hitsOf(b.adds[j])} />);
     });
   });
   gapRows(gapAfter(file), "tail");
@@ -226,8 +241,10 @@ const sign = { context: " ", add: "+", del: "−" } as const;
 const NO_EOL = '<span class="noeol" title="Нет перевода строки в конце файла">нет ⏎</span>';
 const withEol = (html: string, row: Row) => (row.noEol ? html + NO_EOL : html);
 
-function UniRow({ row, lang }: { row: Row; lang: string | null }) {
-  const html = withEol(highlightMarked(row.text, lang, row.mark, row.kind === "add" ? "wa" : "wd"), row);
+const NO_HITS: Hit[] = [];
+
+function UniRow({ row, lang, hits = NO_HITS }: { row: Row; lang: string | null; hits?: Hit[] }) {
+  const html = withEol(highlightHits(row.text, lang, row.mark, row.kind === "add" ? "wa" : "wd", hits), row);
   return (
     <tr className={row.kind === "context" ? "" : row.kind}>
       <td className="no">{row.old ?? ""}</td>
@@ -238,8 +255,8 @@ function UniRow({ row, lang }: { row: Row; lang: string | null }) {
   );
 }
 
-function SplitCtx({ row, lang }: { row: Row; lang: string | null }) {
-  const html = withEol(highlight(row.text, lang), row);
+function SplitCtx({ row, lang, hits = NO_HITS }: { row: Row; lang: string | null; hits?: Hit[] }) {
+  const html = withEol(hits.length ? highlightHits(row.text, lang, undefined, "", hits) : highlight(row.text, lang), row);
   return (
     <tr>
       <td className="no">{row.old}</td>
@@ -250,13 +267,25 @@ function SplitCtx({ row, lang }: { row: Row; lang: string | null }) {
   );
 }
 
-function SplitChg({ del, add, lang }: { del?: Row; add?: Row; lang: string | null }) {
+function SplitChg({
+  del,
+  add,
+  lang,
+  delHits = NO_HITS,
+  addHits = NO_HITS,
+}: {
+  del?: Row;
+  add?: Row;
+  lang: string | null;
+  delHits?: Hit[];
+  addHits?: Hit[];
+}) {
   return (
     <tr>
       {del ? (
         <>
           <td className="no del">{del.old}</td>
-          <td className="cd del" dangerouslySetInnerHTML={{ __html: withEol(highlightMarked(del.text, lang, del.mark, "wd"), del) }} />
+          <td className="cd del" dangerouslySetInnerHTML={{ __html: withEol(highlightHits(del.text, lang, del.mark, "wd", delHits), del) }} />
         </>
       ) : (
         <>
@@ -267,7 +296,7 @@ function SplitChg({ del, add, lang }: { del?: Row; add?: Row; lang: string | nul
       {add ? (
         <>
           <td className="no add sep">{add.new}</td>
-          <td className="cd add" dangerouslySetInnerHTML={{ __html: withEol(highlightMarked(add.text, lang, add.mark, "wa"), add) }} />
+          <td className="cd add" dangerouslySetInnerHTML={{ __html: withEol(highlightHits(add.text, lang, add.mark, "wa", addHits), add) }} />
         </>
       ) : (
         <>

@@ -40,6 +40,42 @@ export function highlight(text: string, lang: string | null): string {
   }
 }
 
+export interface Hit {
+  start: number;
+  end: number;
+  /** The match the search is on now. */
+  current: boolean;
+}
+
+/**
+ * Highlights a line with its changed part and search hits marked. The line is cut where any mark
+ * starts or ends and each piece is highlighted on its own, as for the changed part alone.
+ */
+export function highlightHits(text: string, lang: string | null, mark: [number, number] | undefined, cls: string, hits: Hit[]): string {
+  if (hits.length === 0) return highlightMarked(text, lang, mark, cls);
+  const cuts = new Set([0, text.length]);
+  if (mark && mark[0] < mark[1]) {
+    cuts.add(mark[0]);
+    cuts.add(mark[1]);
+  }
+  for (const h of hits) {
+    cuts.add(h.start);
+    cuts.add(h.end);
+  }
+  const at = [...cuts].sort((a, b) => a - b);
+  let out = "";
+  for (let k = 0; k < at.length - 1; k++) {
+    const [s, e] = [at[k], at[k + 1]];
+    if (s === e) continue;
+    let piece = highlight(text.slice(s, e), lang);
+    const hit = hits.find((h) => s >= h.start && e <= h.end);
+    if (hit) piece = `<mark class="sm${hit.current ? " cur" : ""}">${piece}</mark>`;
+    if (mark && s >= mark[0] && e <= mark[1]) piece = `<mark class="${cls}">${piece}</mark>`;
+    out += piece;
+  }
+  return out;
+}
+
 /** Highlights a line with its changed part wrapped in a mark. */
 export function highlightMarked(text: string, lang: string | null, mark: [number, number] | undefined, cls: string): string {
   if (!mark || mark[0] >= mark[1]) return highlight(text, lang);

@@ -12,6 +12,7 @@
   --add-bg: #e8f6ec; --add-num: #d2eddb; --add-mark: #a9ddb7;
   --del-bg: #fdedee; --del-num: #f7d8db; --del-mark: #f0b5ba;
   --hunk-bg: #edf1fa; --hunk-fg: #4b5c88;
+  --find: #fde68a; --find-edge: #f2c94c; --find-cur: #fb923c; --find-cur-edge: #ea580c;
   --kw: #9a2c86; --str: #20713a; --com: #8790a1; --sym: #a3530a; --num: #1d5cba; --cls: #0b717b; --fn: #2b55c9;
   --shadow: 0 12px 32px rgba(22, 32, 52, .16), 0 2px 6px rgba(22, 32, 52, .08);
   --sans: "IBM Plex Sans", -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -31,6 +32,7 @@
     --add-bg: #11301c; --add-num: #173a23; --add-mark: #23633a;
     --del-bg: #381618; --del-num: #43191c; --del-mark: #7a2a30;
     --hunk-bg: #1a2238; --hunk-fg: #97a8d6;
+    --find: #5c4a12; --find-edge: #8a6d17; --find-cur: #b4531c; --find-cur-edge: #f08a4b;
     --kw: #e58ad6; --str: #8fd3a0; --com: #6b7484; --sym: #f0b26a; --num: #8ab4ff; --cls: #4cc6cd; --fn: #9db4ff;
     --shadow: 0 12px 32px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .4);
     color-scheme: dark;
@@ -298,6 +300,17 @@ table.d td.blank { background: var(--sunken); }
 table.d .sep { border-left: 1px solid var(--line); }
 mark.wa { background: var(--add-mark); color: inherit; border-radius: 2px; }
 mark.wd { background: var(--del-mark); color: inherit; border-radius: 2px; }
+/* find in the diff (⌘F): every match, and the one the search is on */
+mark.sm { background: var(--find); color: inherit; border-radius: 2px; box-shadow: 0 0 0 1px var(--find-edge); }
+mark.sm.cur { background: var(--find-cur); box-shadow: 0 0 0 2px var(--find-cur-edge); }
+.dfind { position: sticky; top: 0; z-index: 6; display: flex; align-items: center; gap: 4px; margin-bottom: 10px; padding: 6px 8px; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 8px; box-shadow: var(--shadow); }
+.dfind input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: 13.5px var(--mono); padding: 3px 4px; }
+.dfind .count { font-size: 12.5px; color: var(--muted); white-space: nowrap; padding: 0 6px; }
+.dfind .count.none { color: var(--bad); }
+.dfind .ib { min-width: 26px; height: 26px; }
+.dfind .ib[disabled] { opacity: .4; cursor: default; }
+.dfind .case { font: 600 12px var(--sans); }
+.dfind .case.on { background: var(--accent-weak); color: var(--accent); }
 tr.hunk td { background: var(--hunk-bg); color: var(--hunk-fg); padding-top: 3px; padding-bottom: 3px; }
 tr.gap td { background: var(--hunk-bg); padding: 0; }
 tr.gap button { width: 100%; text-align: left; border: 0; background: none; color: var(--accent); font: 12px var(--mono); padding: 4px 12px; }

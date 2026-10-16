@@ -6,6 +6,8 @@ import FileTree from "./FileTree";
 import FileView, { Mode } from "./FileView";
 import Conflicts from "./Conflicts";
 import { fingerprint } from "./model";
+import { byFile, findMatches, MATCH_LIMIT } from "./search";
+import { key } from "../platform";
 import { ErrorBanner } from "../components/ErrorBanner";
 
 type Tab = "files" | "commits" | "conflicts";
@@ -47,6 +49,13 @@ export default function DiffView({ info, branch, base, tick, onBack, onCheckout 
   const [flipped, setFlipped] = useState<Set<string>>(new Set());
   const [active, setActive] = useState(0);
   const [toast, setToast] = useState<string | null>(null);
+  // Find in the diff (⌘F).
+  const [findOpen, setFindOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [typed, setTyped] = useState("");
+  const [caseSensitive, setCaseSensitive] = useState(false);
+  const [cur, setCur] = useState(0);
+  const findRef = useRef<HTMLInputElement>(null);
   const request = useRef(0);
 
   const hasConflicts = branch.status.kind === "conflict";
@@ -136,6 +145,54 @@ export default function DiffView({ info, branch, base, tick, onBack, onCheckout 
     [files],
   );
 
+  // Typing redraws every file with a match, so wait for a pause.
+  useEffect(() => {
+    const t = window.setTimeout(() => setQuery(typed), 120);
+    return () => window.clearTimeout(t);
+  }, [typed]);
+  const matches = useMemo(() => (findOpen ? findMatches(files, query, caseSensitive) : []), [findOpen, files, query, caseSensitive]);
+  const perFile = useMemo(() => byFile(matches, files.length), [matches, files.length]);
+  useEffect(() => setCur(0), [matches]);
+  const curMatch = matches[cur];
+
+  // Bring the current match into view: unfold its file, then scroll to its mark.
+  useEffect(() => {
+    if (!curMatch) return;
+    const i = curMatch.file;
+    if (isCollapsed(i)) toggleCollapse(i);
+    setActive(i);
+    // A file that was folded or big draws its rows a few frames later: wait for the mark.
+    let frame = 0;
+    let tries = 0;
+    const scroll = () => {
+      const mark = document.querySelector(".flist mark.sm.cur");
+      if (mark) mark.scrollIntoView({ block: "center" });
+      else if (tries++ < 120) frame = requestAnimationFrame(scroll);
+    };
+    frame = requestAnimationFrame(scroll);
+    return () => cancelAnimationFrame(frame);
+  }, [curMatch]);
+
+  const openFind = useCallback(() => {
+    setTab("files");
+    setFindOpen(true);
+    requestAnimationFrame(() => {
+      findRef.current?.focus();
+      findRef.current?.select();
+    });
+  }, []);
+  const closeFind = () => {
+    setFindOpen(false);
+    findRef.current?.blur();
+  };
+  const step = useCallback(
+    (by: number) => {
+      if (matches.length === 0) return;
+      setCur((c) => (c + by + matches.length) % matches.length);
+    },
+    [matches.length],
+  );
+
   const jump = useCallback((i: number) => {
     setActive(i);
     document.getElementById(`file-${i}`)?.scrollIntoView({ block: "start" });
@@ -143,6 +200,17 @@ export default function DiffView({ info, branch, base, tick, onBack, onCheckout 
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const k = e.key.toLowerCase();
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && k === "f") {
+        e.preventDefault();
+        openFind();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && k === "g" && findOpen) {
+        e.preventDefault();
+        step(e.shiftKey ? -1 : 1);
+        return;
+      }
       if (document.activeElement instanceof HTMLInputElement && document.activeElement.type !== "checkbox") return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (e.key === "Escape") onBack();
@@ -157,7 +225,7 @@ export default function DiffView({ info, branch, base, tick, onBack, onCheckout 
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tab, files.length, active, jump, toggleViewed, isViewed, onBack]);
+  }, [tab, files.length, active, jump, toggleViewed, isViewed, onBack, openFind, step, findOpen]);
 
   const copy = async (text: string) => {
     setToast((await copyText(text)) ? `Скопировано: ${text}` : "Не удалось скопировать");
@@ -334,6 +402,54 @@ export default function DiffView({ info, branch, base, tick, onBack, onCheckout 
             <div className="dgrid">
               <FileTree files={files} viewed={isViewed} active={active} onJump={jump} />
               <div className="flist">
+                {findOpen && (
+                  <div className="dfind" role="search">
+                    <input
+                      ref={findRef}
+                      value={typed}
+                      onChange={(e) => setTyped(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          if (typed !== query) setQuery(typed);
+                          else step(e.shiftKey ? -1 : 1);
+                        } else if (e.key === "Escape") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          closeFind();
+                        }
+                      }}
+                      placeholder="Найти в диффе"
+                      aria-label="Найти в диффе"
+                      spellCheck={false}
+                      title="Ищет в строках диффа, в том числе в свёрнутых и больших файлах. Скрытые строки между фрагментами не ищутся, пока их не развернуть."
+                    />
+                    <span className={`count num ${query && matches.length === 0 ? "none" : ""}`}>
+                      {!query
+                        ? ""
+                        : matches.length === 0
+                          ? "нет совпадений"
+                          : `${cur + 1} из ${matches.length}${matches.length >= MATCH_LIMIT ? "+" : ""}`}
+                    </span>
+                    <button
+                      className={`ib case ${caseSensitive ? "on" : ""}`}
+                      onClick={() => setCaseSensitive((v) => !v)}
+                      title="Учитывать регистр"
+                      aria-pressed={caseSensitive}
+                    >
+                      Aa
+                    </button>
+                    <button className="ib" onClick={() => step(-1)} disabled={matches.length === 0} title={`Предыдущее (⇧Enter, ⇧${key("G")})`} aria-label="Предыдущее совпадение">
+                      ↑
+                    </button>
+                    <button className="ib" onClick={() => step(1)} disabled={matches.length === 0} title={`Следующее (Enter, ${key("G")})`} aria-label="Следующее совпадение">
+                      ↓
+                    </button>
+                    <button className="ib" onClick={closeFind} title="Закрыть (Esc)" aria-label="Закрыть поиск">
+                      ✕
+                    </button>
+                  </div>
+                )}
                 {files.map((f, i) => (
                   <FileView
                     key={(commit?.hash ?? "") + f.path}
@@ -346,6 +462,8 @@ export default function DiffView({ info, branch, base, tick, onBack, onCheckout 
                     active={active === i}
                     onViewed={toggleViewed}
                     onCollapse={toggleCollapse}
+                    matches={perFile[i]}
+                    current={curMatch?.file === i ? cur : -1}
                   />
                 ))}
               </div>
